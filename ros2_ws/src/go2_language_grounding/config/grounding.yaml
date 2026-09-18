@@ -31,6 +31,9 @@ go2_language_grounding:
     goal_max_stand_off_m: 2.0
     costmap_free_max_cost: 50
     retry_with_wider_ring: true
+    # Accept a stand-off slot in unmapped space (Nav2 plans through unknown);
+    # known-free slots are always preferred.
+    goal_allow_unknown: true
 
     use_costmap_gate: true
     # Hardware safety interlock. Keep false until the base navigation stack is validated.

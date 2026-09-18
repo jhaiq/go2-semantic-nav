@@ -19,6 +19,7 @@ class SamplerParams:
     goal_max_stand_off_m: float = 2.0
     costmap_free_max_cost: int = 50
     retry_with_wider_ring: bool = True
+    allow_unknown: bool = True
 
 
 def _yaw_to_quat(yaw: float) -> Quaternion:
@@ -48,16 +49,26 @@ def _cell_cost(costmap: OccupancyGrid, gx: int, gy: int) -> int:
     return int(costmap.data[idx])
 
 
-def _is_free(costmap: Optional[OccupancyGrid], x: float, y: float, max_cost: int) -> bool:
+def _is_free(costmap: Optional[OccupancyGrid], x: float, y: float, max_cost: int,
+             allow_unknown: bool = False) -> bool:
+    return _cell_state(costmap, x, y, max_cost, allow_unknown) is not None
+
+
+def _cell_state(costmap: Optional[OccupancyGrid], x: float, y: float, max_cost: int,
+                allow_unknown: bool) -> Optional[str]:
+    """'free', 'unknown' (only if allowed), or None when the cell is not usable."""
     if costmap is None:
-        return True  # no costmap → don't block; caller is responsible
+        return "free"  # no costmap → don't block; caller is responsible
     pt = _world_to_grid(x, y, costmap)
     if pt is None:
-        return False  # off-map
+        return None  # off-map
     cost = _cell_cost(costmap, *pt)
-    if cost < 0:  # unknown
-        return False
-    return cost <= max_cost
+    if cost < 0:
+        # Unknown. Objects are often seen by the camera before the LiDAR has
+        # mapped the room they are in; Nav2 plans through unknown space and
+        # replans as it is observed. Known-free slots are still preferred.
+        return "unknown" if allow_unknown else None
+    return "free" if cost <= max_cost else None
 
 
 def sample_stand_off(
@@ -101,7 +112,8 @@ def sample_stand_off(
             theta = 2.0 * math.pi * k / p.goal_ring_samples
             gx = float(target_xyz[0] + ring_radius * math.cos(theta))
             gy = float(target_xyz[1] + ring_radius * math.sin(theta))
-            if not _is_free(costmap, gx, gy, p.costmap_free_max_cost):
+            state = _cell_state(costmap, gx, gy, p.costmap_free_max_cost, p.allow_unknown)
+            if state is None:
                 continue
             # Face the target from this pose.
             yaw = math.atan2(float(target_xyz[1]) - gy, float(target_xyz[0]) - gx)
@@ -119,6 +131,8 @@ def sample_stand_off(
                 )
             else:
                 cost = 0.0
+            if state == "unknown":
+                cost += 1.0e3  # any known-free slot beats any unknown one
             candidates.append((cost, ps))
 
         if candidates:

@@ -84,6 +84,7 @@ class GroundingNode(Node):
         self.declare_parameter("goal_max_stand_off_m", 2.0)
         self.declare_parameter("costmap_free_max_cost", 50)
         self.declare_parameter("retry_with_wider_ring", True)
+        self.declare_parameter("goal_allow_unknown", True)
 
         self.declare_parameter("use_costmap_gate", True)
         self.declare_parameter("allow_goal_publication", False)
@@ -512,6 +513,7 @@ class GroundingNode(Node):
             goal_max_stand_off_m=float(self.get_parameter("goal_max_stand_off_m").value),
             costmap_free_max_cost=int(self.get_parameter("costmap_free_max_cost").value),
             retry_with_wider_ring=bool(self.get_parameter("retry_with_wider_ring").value),
+            allow_unknown=bool(self.get_parameter("goal_allow_unknown").value),
         )
         goal_pose = sample_stand_off(
             target_xyz=target_xyz,
