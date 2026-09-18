@@ -21,7 +21,11 @@ safe ones (dry_run adapter, interlock off).
 
 Arguments
 ---------
-planner                 nav2 | staged_nav   (default nav2)
+planner                 nav2 | staged_nav   (default nav2). staged_nav is the
+                        straight-line approach controller behind a
+                        NavigateToPose adapter: no planning, no obstacle
+                        avoidance, no costmap (the grounding costmap gate is
+                        switched off with it).
 localization            slam_mapping | slam_localization   (default slam_mapping)
 map_file                serialized slam_toolbox pose graph for slam_localization
 hardware_adapter        dry_run | unitree_sport   (default dry_run)
@@ -37,7 +41,7 @@ from __future__ import annotations
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.substitutions import FindPackageShare
 
 _ARGS = {
@@ -93,6 +97,13 @@ def generate_launch_description() -> LaunchDescription:
             "enable_scene_graph": cfg["enable_scene_graph"],
             "enable_grounding": "true",
             "allow_goal_publication": cfg["allow_goal_publication"],
+            # The staged planner runs no Nav2, so there is no costmap; grounding
+            # then samples stand-offs without one (the LiDAR hazard source and
+            # the arbiter still guard motion; the staged planner cannot avoid
+            # obstacles, so use it only for straight-line-clear goals).
+            "use_costmap_gate": PythonExpression(
+                ["'false' if '", cfg["planner"], "' == 'staged_nav' else 'true'"]
+            ),
             "navigation_backend": "nav2_action",
             "navigate_to_pose_action": "/navigate_to_pose",
             "image_topic": cfg["image_topic"],

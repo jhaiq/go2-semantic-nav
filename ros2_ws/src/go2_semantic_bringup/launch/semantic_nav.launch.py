@@ -34,6 +34,7 @@ from launch.substitutions import (
     LaunchConfiguration,
 )
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -62,6 +63,8 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument("enable_detector", default_value="true"),
         DeclareLaunchArgument("enable_scene_graph", default_value="true"),
         DeclareLaunchArgument("enable_grounding", default_value="true"),
+        DeclareLaunchArgument("use_costmap_gate", default_value="true",
+                              description="Require a fresh global costmap; false only for planners without one"),
         DeclareLaunchArgument("allow_goal_publication", default_value="false"),
         DeclareLaunchArgument("navigation_backend", default_value="nav2_action"),
         DeclareLaunchArgument("navigate_to_pose_action", default_value="/navigate_to_pose"),
@@ -132,6 +135,7 @@ def generate_launch_description() -> LaunchDescription:
                 "device": LaunchConfiguration("device"),
                 "encoder_backend": LaunchConfiguration("encoder"),
                 "allow_goal_publication": LaunchConfiguration("allow_goal_publication"),
+                "use_costmap_gate": ParameterValue(LaunchConfiguration("use_costmap_gate"), value_type=bool),
                 "navigation_backend": LaunchConfiguration("navigation_backend"),
                 "navigate_to_pose_action": LaunchConfiguration("navigate_to_pose_action"),
                 "use_sim_time": LaunchConfiguration("use_sim_time"),

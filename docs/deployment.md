@@ -11,7 +11,25 @@ The semantic overlay requires these external contracts:
 - a current global costmap in `map` when `use_costmap_gate` is enabled
 - for motion only: proven odometry, robot TF, localization or mapping, a `/goal_pose` consumer, and an independently tested stop path
 
-The current sibling base stack has not yet proven all motion contracts. Keep motors disabled and `allow_goal_publication:=false` until those contracts are demonstrated on hardware.
+The sibling base stack (GO2-seeing-eye-dog, branch `feat/nav2-deploy`) now
+provides these contracts: odometry and LiDAR relayed with robot-clock
+correction, `map -> odom` from slam_toolbox, Nav2 serving `NavigateToPose`,
+a LiDAR hazard source, and the safety arbiter as the only path to the robot.
+They are verified in closed-loop simulation only (see `RESULTS.md`). On the
+robot, follow the staged runbook in that repository, `docs/DEPLOYMENT.md`:
+preflight, motors untouched, dry-run actuator, then low-speed motion. Keep
+`allow_goal_publication:=false` until its stage 3 passes.
+
+One launch brings up both stacks:
+
+```bash
+ros2 launch go2_semantic_bringup deploy.launch.py \
+  planner:=nav2 localization:=slam_mapping hardware_adapter:=dry_run \
+  allow_goal_publication:=false
+```
+
+Motion needs all three: `hardware_adapter:=unitree_sport`,
+`allow_goal_publication:=true`, and a request with `dry_run: false`.
 
 ## Workstation setup
 

@@ -111,7 +111,7 @@ def _stop(proc: subprocess.Popen, grace_s: float = 15.0) -> None:
 
 
 def _run(objects: dict, query_timeout: float, ready_timeout: float,
-         min_surface: float, max_surface: float) -> dict:
+         min_surface: float, max_surface: float, queries=None, need_costmap: bool = True) -> dict:
     import rclpy
     from geometry_msgs.msg import PoseStamped
     from go2_semantic_msgs.action import GroundAndNavigate
@@ -136,7 +136,8 @@ def _run(objects: dict, query_timeout: float, ready_timeout: float,
 
     out = {"ready": False, "queries": []}
     out["ready"] = bool(spin_until(
-        lambda: st["valid"] and st["costmap"] and st["gt"] is not None and client.server_is_ready(),
+        lambda: st["valid"] and (st["costmap"] or not need_costmap) and st["gt"] is not None
+        and client.server_is_ready(),
         ready_timeout))
     if not out["ready"]:
         node.destroy_node()
@@ -144,7 +145,7 @@ def _run(objects: dict, query_timeout: float, ready_timeout: float,
         return out
     spin_until(lambda: False, 3.0)
 
-    for text, expected in QUERIES:
+    for text, expected in (queries or QUERIES):
         p0 = st["gt"].pose.position
         start_xy = (p0.x, p0.y)
         req = GroundAndNavigate.Goal()
@@ -202,6 +203,8 @@ def main(argv=None) -> int:
                     help="closest acceptable stop to the object surface (m)")
     ap.add_argument("--max-surface", type=float, default=1.5)
     ap.add_argument("--domain-base", type=int, default=170)
+    ap.add_argument("--queries", default=None,
+                    help="'text=label;text=' (empty label = must be refused); default: apartment set")
     ap.add_argument("--out", default="eval/results/sim_semantic")
     args = ap.parse_args(argv)
 
@@ -219,7 +222,11 @@ def main(argv=None) -> int:
         os.environ["ROS_DOMAIN_ID"], os.environ["ROS_LOCALHOST_ONLY"] = str(domain), "1"
         try:
             print(f"trial {i} (domain {domain}, planner {args.planner})", flush=True)
-            res = _run(objects, args.query_timeout, args.ready_timeout, args.min_surface, args.max_surface)
+            queries = None
+            if args.queries:
+                queries = [(q.split("=")[0], q.split("=")[1] or None) for q in args.queries.split(";")]
+            res = _run(objects, args.query_timeout, args.ready_timeout, args.min_surface,
+                       args.max_surface, queries, need_costmap=(args.planner == "nav2"))
         finally:
             _stop(proc)
             if prev is None:

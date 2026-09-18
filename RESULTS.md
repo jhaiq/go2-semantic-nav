@@ -62,6 +62,33 @@ Over 20 queries × 1 trial per config in `eval/queries.yaml` (dev-synthetic = bu
 
 ## End-to-end navigation
 
+### Closed-loop simulation (2026-09-18)
+
+Not hardware evidence. `eval/sim_semantic_trials.py` drives text queries
+through the full deployment graph (`deploy.launch.py`): grounding ->
+NavigateToPose -> Nav2 (LiDAR SLAM localization) -> safety arbiter -> hardware
+bridge with the real Unitree Sport API adapter -> `go2_sim`, a kinematic GO2
+with the robot's DDS surface, measured robot-clock skew and a simulated L1
+LiDAR. Perception is a stand-in (`scripts/sim_scene_graph.py`: labelled world
+objects with embeddings at real image-to-text similarity levels), so these
+rows measure the grounding-to-actuation chain, not detection. Two-room world
+with a 1.0 m doorway; the refrigerator is in the room that starts unmapped.
+
+| Planner | Trials | Present objects reached (correct label, 0.5-1.5 m from surface) | Absent objects refused, no motion | Collisions | Stop distance from surface |
+|---|---|---|---|---|---|
+| Nav2 (`planner:=nav2`) | 3 | 15/15 | 9/9 | 0 | 0.75-1.28 m |
+| Straight-line adapter (`planner:=staged_nav`), open room | 2 | 4/4 | 2/2 | 0 | 0.79-0.96 m |
+
+The straight-line option has no planner and no obstacle avoidance, so it
+was run in an obstacle-free room; in the apartment it stops at the first
+obstacle on the straight line and holds.
+
+Base-stack goal trials (`ros2 run go2_sim closed_loop_trials`, same graph,
+fixed goals through both rooms): 60/60 goals over 12 fresh trials, 0
+collisions, arrival error median 0.19 m, p90 0.28 m.
+
+### On the robot
+
 Measured on GO2 EDU with `seeing-eye-dog` Nav2 downstream; ≥3 trials per query.
 
 | Config | Navigation SR | SPL | Mean final-goal error m |
