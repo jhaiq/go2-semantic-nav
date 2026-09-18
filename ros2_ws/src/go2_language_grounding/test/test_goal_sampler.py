@@ -116,3 +116,23 @@ def test_sampler_stand_off_override_clamped_to_range():
     assert ps is not None
     r = math.hypot(ps.pose.position.x, ps.pose.position.y)
     assert abs(r - 1.5) < 1e-3  # clamped to max
+
+
+def test_stand_off_is_measured_from_object_surface():
+    """A 1.0 m wide object: the pose sits stand_off + 0.5 m from its centroid."""
+    target = np.array([2.0, 0.0, 0.0], dtype=np.float32)
+    ps = sample_stand_off(
+        target, costmap=None, params=SamplerParams(stand_off_m=0.9, goal_ring_samples=8),
+        map_frame="map", target_half_extent_m=0.5,
+    )
+    d = float(np.hypot(ps.pose.position.x - 2.0, ps.pose.position.y))
+    assert abs(d - 1.4) < 1e-5
+
+
+def test_prefers_the_slot_nearest_the_robot():
+    target = np.array([0.0, 0.0, 0.0], dtype=np.float32)
+    ps = sample_stand_off(
+        target, costmap=None, params=SamplerParams(stand_off_m=1.0, goal_ring_samples=12),
+        prefer_origin_xyz=np.array([-5.0, 0.0, 0.0]), map_frame="map",
+    )
+    assert ps.pose.position.x < -0.9  # on the robot's side, not behind the object

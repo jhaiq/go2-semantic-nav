@@ -22,6 +22,9 @@ go2_language_grounding:
     score_weight_spatial: 0.1
 
     # Goal sampling
+    # Measured from the object's SURFACE (centroid + half footprint extent).
+    # base_link is ~0.40 m behind the nose, and the LiDAR hazard source stops
+    # at 0.35 m from the nose, so this must stay above ~0.75 m.
     stand_off_m: 0.9
     goal_ring_samples: 12
     goal_min_stand_off_m: 0.4

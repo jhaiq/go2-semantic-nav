@@ -38,6 +38,8 @@ from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalRespons
 from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy
+from rclpy.time import Time
+from tf2_ros import Buffer, TransformException, TransformListener
 
 from .goal_sampler import SamplerParams, sample_stand_off
 from .query_parser import ParsedQuery, parse
@@ -59,6 +61,7 @@ class GroundingNode(Node):
 
         # --- parameters ---
         self.declare_parameter("map_frame", "map")
+        self.declare_parameter("robot_frame", "base_link")
         self.declare_parameter("scene_graph_topic", "/semantic/scene_graph")
         self.declare_parameter("costmap_topic", "/global_costmap/costmap")
         self.declare_parameter("goal_pose_topic", "/goal_pose")
@@ -143,6 +146,8 @@ class GroundingNode(Node):
             goal_callback=self._on_goal_request,
             cancel_callback=lambda _goal: CancelResponse.ACCEPT,
         )
+        self._tf_buffer = Buffer()
+        self._tf_listener = TransformListener(self._tf_buffer, self)
         self._nav_client = ActionClient(
             self,
             NavigateToPose,
@@ -512,7 +517,9 @@ class GroundingNode(Node):
             target_xyz=target_xyz,
             costmap=costmap,
             params=sampler_params,
+            prefer_origin_xyz=self._robot_xyz(),
             map_frame=str(self.get_parameter("map_frame").value),
+            target_half_extent_m=self._half_extent(graph, top.object_id),
         )
         if goal_pose is None:
             return self._abort_result(
@@ -557,6 +564,30 @@ class GroundingNode(Node):
         self._publish_feedback(goal_handle, result.terminal_state, candidates, len(graph.nodes))
         goal_handle.succeed()
         return result
+
+    def _robot_xyz(self) -> Optional[np.ndarray]:
+        """Robot position in the map frame, so the nearest free slot is chosen."""
+        try:
+            tf = self._tf_buffer.lookup_transform(
+                str(self.get_parameter("map_frame").value),
+                str(self.get_parameter("robot_frame").value),
+                Time(),
+            )
+        except TransformException:
+            return None
+        t = tf.transform.translation
+        return np.array([t.x, t.y, t.z], dtype=np.float32)
+
+    @staticmethod
+    def _half_extent(graph: SceneGraph, object_id: str) -> float:
+        """Footprint half-extent of an object: stand-off is measured from its surface."""
+        for obj in graph.nodes:
+            if obj.object_id == object_id:
+                dx, dy = float(obj.dimensions_xyz.x), float(obj.dimensions_xyz.y)
+                if not (np.isfinite(dx) and np.isfinite(dy)):
+                    return 0.0
+                return max(0.0, 0.5 * max(dx, dy))
+        return 0.0
 
     def _dispatch_navigation(
         self,

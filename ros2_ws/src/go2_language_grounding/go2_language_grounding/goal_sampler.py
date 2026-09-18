@@ -67,25 +67,34 @@ def sample_stand_off(
     prefer_origin_xyz: Optional[np.ndarray] = None,
     stand_off_override: Optional[float] = None,
     map_frame: str = "map",
+    target_half_extent_m: float = 0.0,
 ) -> Optional[PoseStamped]:
     """Return a PoseStamped standing `stand_off_m` from the target, facing it,
     landing on a free-ish costmap cell. Returns None if no sample passes.
+
+    ``stand_off_m`` is measured from the object's SURFACE, approximated as a
+    circle of radius ``target_half_extent_m`` around its centroid. Measuring
+    from the centroid put the robot's nose inside the LiDAR hazard stop
+    distance of any object larger than ~0.3 m, so every arrival ended in a
+    latched emergency stop.
 
     ``prefer_origin_xyz`` is the robot's current pose (if known); sampled poses
     are ranked by closeness to it so the robot picks the nearest reachable slot.
     """
     p = params or SamplerParams()
-    radius = stand_off_override or p.stand_off_m
-    radius = max(p.goal_min_stand_off_m, min(p.goal_max_stand_off_m, radius))
+    surface = stand_off_override or p.stand_off_m
+    surface = max(p.goal_min_stand_off_m, min(p.goal_max_stand_off_m, surface))
+    half_extent = max(0.0, float(target_half_extent_m))
 
     candidates: list[tuple[float, PoseStamped]] = []
 
-    # Two sweeps: primary ring at requested radius, secondary at 1.3× if needed.
-    rings = [radius]
+    # Two sweeps: primary ring at the requested surface distance, secondary at
+    # 1.3x (clamped) if needed. Both are offset by the object's half extent.
+    surfaces = [surface]
     if p.retry_with_wider_ring:
-        rings.append(min(radius * 1.3, p.goal_max_stand_off_m))
+        surfaces.append(min(surface * 1.3, p.goal_max_stand_off_m))
     # Deduplicate if both rings landed on same radius.
-    rings = list(dict.fromkeys(round(r, 3) for r in rings))
+    rings = list(dict.fromkeys(round(s_ + half_extent, 3) for s_ in surfaces))
 
     for ring_radius in rings:
         for k in range(p.goal_ring_samples):
