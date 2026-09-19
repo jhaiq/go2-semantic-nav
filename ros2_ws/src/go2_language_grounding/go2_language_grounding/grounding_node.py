@@ -45,6 +45,7 @@ from .goal_sampler import SamplerParams, sample_stand_off
 from .query_parser import ParsedQuery, parse
 from .safety_gates import frame_error, freshness_error, publication_error
 from .scoring import ScoreWeights, combine, cosine_similarity, lexical_label_match
+from .selection import GateParams, choose_nearest
 
 
 def _qos_reliable_depth10() -> QoSProfile:
@@ -102,6 +103,12 @@ class GroundingNode(Node):
                                    "If >0, require top-1.score - top-2.score >= this margin. "
                                    "Stricter than the label/clip floors but cuts recall when "
                                    "multiple legitimate candidates cluster together."
+                               )))
+        self.declare_parameter("nearest_score_window", 0.10,
+                               ParameterDescriptor(description=(
+                                   "For 'nearest <object>' queries: a candidate may be chosen "
+                                   "over the top one only if its score is within this window "
+                                   "of the top score and it passes the same floors."
                                )))
 
         # --- state ---
@@ -482,7 +489,9 @@ class GroundingNode(Node):
                 start_ns,
                 final_candidates=candidates[:5],
             )
-        if margin_min > 0.0 and len(candidates) >= 2:
+        # "nearest chair" is asked precisely when several chairs match equally well,
+        # so the margin gate does not apply to it.
+        if margin_min > 0.0 and len(candidates) >= 2 and not parsed.nearest:
             margin = top.score - candidates[1].score
             if margin < margin_min:
                 return self._abort_result(
@@ -493,6 +502,22 @@ class GroundingNode(Node):
                     start_ns,
                     final_candidates=candidates[:5],
                 )
+
+        selection_note = ""
+        if parsed.nearest:
+            robot = self._robot_xyz()
+            idx, used_distance = choose_nearest(
+                candidates,
+                None if robot is None else (float(robot[0]), float(robot[1])),
+                GateParams(absolute_floor, label_floor, clip_floor),
+                float(self.get_parameter("nearest_score_window").value),
+                lambda c: (c.object_pose.pose.position.x, c.object_pose.pose.position.y),
+            )
+            top = candidates[idx]
+            selection_note = (
+                "; nearest match to the robot" if used_distance
+                else "; robot pose unavailable, used the best match instead of the nearest"
+            )
 
         # Sample a reachable stand-off pose.
         self._publish_feedback(goal_handle, "SAMPLING_GOAL", candidates, len(graph.nodes))
@@ -555,7 +580,7 @@ class GroundingNode(Node):
 
         result = GroundAndNavigate.Result()
         result.success = True
-        result.message = "dry-run: goal computed, not dispatched"
+        result.message = "dry-run: goal computed, not dispatched" + selection_note
         result.final_goal = goal_pose
         result.chosen_object_id = top.object_id
         result.chosen_object_label = top.label
