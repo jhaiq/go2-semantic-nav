@@ -1,0 +1,49 @@
+go2_open_vocab_detector:
+  ros__parameters:
+    # Backends — see docs/architecture.md §Model backends for the full list.
+    detector_backend: yoloe_26s
+    segmenter_backend: native
+    encoder_backend: mobileclip2_s0
+
+    # Compute
+    device: cuda:0
+    detection_rate_hz: 2.0
+    conf_threshold: 0.3
+    max_objects_per_frame: 8
+
+    # Depth / back-projection
+    min_depth_m: 0.2
+    max_depth_m: 8.0
+
+    # Subscriptions
+    image_topic: /camera/camera/color/image_raw
+    depth_topic: /camera/camera/aligned_depth_to_color/image_raw
+    camera_info_topic: /camera/camera/color/camera_info
+    # Reject unregistered depth. Resizing depth is not geometric alignment.
+    require_aligned_depth: true
+    sync_slop_sec: 0.05
+
+    # Mask post-processing
+    mask_downsample: 1
+
+    # Open-vocabulary prompt list
+    prompts:
+      - chair
+      - sofa
+      - table
+      - desk
+      - window
+      - door
+      - person
+      - refrigerator
+      - television
+      - bed
+      - lamp
+      - potted plant
+      - bookshelf
+      - cup
+      - laptop
+      - backpack
+
+    # Soft lifecycle
+    active: true

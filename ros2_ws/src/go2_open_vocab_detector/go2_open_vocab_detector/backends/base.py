@@ -16,7 +16,7 @@ class DetectorOutput:
     scores: np.ndarray      # (N,)  float32
     labels: list[str]       # length N
     latency_ms: float
-
+    masks: np.ndarray | None = None   # (N, H, W) bool，与输入图像同尺寸
 
 @dataclass
 class SegmenterOutput:

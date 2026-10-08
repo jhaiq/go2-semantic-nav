@@ -1,0 +1,9 @@
+numpy==1.26.4
+ultralytics==8.3.40
+open_clip_torch==2.29.0
+sentencepiece==0.2.0
+clip-anytorch
+networkx==3.2.1
+scipy==1.11.4
+pyyaml==6.0.1
+pytest==8.3.2

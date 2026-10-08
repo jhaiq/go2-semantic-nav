@@ -8,12 +8,14 @@ import numpy as np
 
 from .base import DetectorBackend, DetectorOutput
 
+
 _MODEL_NAMES: dict[str, str] = {
     "yolo_world_v2_s": "yolov8s-worldv2.pt",
     "yolo_world_v2_m": "yolov8m-worldv2.pt",
     "yolo_world_v2_l": "yolov8l-worldv2.pt",
     "yolo_world_v2_x": "yolov8x-worldv2.pt",
     "yoloe_11s": "yoloe-11s-seg.pt",
+    "yoloe_26s": "yoloe-26s-seg.pt",
 }
 
 
@@ -37,10 +39,23 @@ class UltralyticsOpenVocabDetector(DetectorBackend):
         self._device: str | None = None
         self._current_prompts: list[str] = []
 
+
+    def _resolve_weight(self) -> str:
+        """裸文件名按 GO2_MODEL_DIR → ~/models → CWD/自动下载 的顺序解析。"""
+        import os
+        from pathlib import Path
+        p = Path(self._weight_file)
+        if p.is_absolute() or p.parent != Path("."):
+            return str(p)
+        for base in (os.environ.get("GO2_MODEL_DIR"), os.path.expanduser("~/models")):
+            if base and (Path(base) / p.name).is_file():
+                return str(Path(base) / p.name)
+        return self._weight_file
+
     def load(self, device: str, prompts: list[str]) -> None:
         from ultralytics import YOLO  # imported lazily; heavy import
 
-        self._model = YOLO(self._weight_file)
+        self._model = YOLO(self._resolve_weight())
         self._device = device
         if prompts:
             self.set_prompts(prompts)
@@ -66,6 +81,7 @@ class UltralyticsOpenVocabDetector(DetectorBackend):
             verbose=False,
             device=self._device,
             max_det=max_objects,
+            retina_masks=True,          # ← 新增
         )
         latency_ms = (time.perf_counter_ns() - start_ns) / 1e6
 
@@ -85,7 +101,7 @@ class UltralyticsOpenVocabDetector(DetectorBackend):
                 labels=[],
                 latency_ms=latency_ms,
             )
-
+        
         boxes_xyxy = r.boxes.xyxy.detach().cpu().numpy().astype(np.float32)
         scores = r.boxes.conf.detach().cpu().numpy().astype(np.float32)
         cls_idx = r.boxes.cls.detach().cpu().numpy().astype(int)
@@ -97,9 +113,14 @@ class UltralyticsOpenVocabDetector(DetectorBackend):
             label = name_map.get(c, f"class_{c}") if isinstance(name_map, dict) else f"class_{c}"
             labels.append(str(label))
 
+        masks = None
+        if getattr(r, "masks", None) is not None and r.masks.data is not None:
+            masks = r.masks.data.cpu().numpy().astype(bool)
+
         return DetectorOutput(
             boxes_xyxy=boxes_xyxy,
             scores=scores,
             labels=labels,
             latency_ms=latency_ms,
+            masks=masks
         )

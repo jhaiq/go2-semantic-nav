@@ -15,6 +15,7 @@ import time
 import numpy as np
 
 from .base import EncoderBackend, EncoderOutput
+from .trt_image_encoder import _TrtImageEncoder
 
 _MODEL_SPECS: dict[str, tuple[str, str, int]] = {
     # key → (open_clip arch, pretrained tag, embedding_dim)
@@ -22,6 +23,9 @@ _MODEL_SPECS: dict[str, tuple[str, str, int]] = {
     "mobileclip_s1": ("MobileCLIP-S1", "datacompdr", 512),
     "mobileclip_s2": ("MobileCLIP-S2", "datacompdr", 512),
     "mobileclip_b": ("MobileCLIP-B", "datacompdr", 512),
+    "mobileclip2_s0": ("MobileCLIP2-S0", "dfndr2b", 512),
+    "mobileclip2_s2": ("MobileCLIP2-S2", "dfndr2b", 512),
+    "mobileclip2_b":  ("MobileCLIP2-B",  "dfndr2b", 512),
 }
 
 
@@ -36,21 +40,59 @@ class MobileClipEncoder(EncoderBackend):
         self._tokenizer = None
         self._device: str | None = None
 
-    def load(self, device: str) -> None:
-        import open_clip
-        import torch
+    def _infer_image_size(self) -> int:
+        """从 OpenCLIP 模型配置中推断输入图像尺寸，失败时回退到 256。"""
+        try:
+            # OpenCLIP 的视觉塔通常有 image_size 属性
+            visual = getattr(self._model, "visual", None)
+            if visual is not None and hasattr(visual, "image_size"):
+                size = visual.image_size
+                # image_size 可能是 int 或 (H, W)
+                return size if isinstance(size, int) else int(size[0])
+            # 部分版本存在 model.image_size
+            size = getattr(self._model, "image_size", None)
+            if size is not None:
+                return size if isinstance(size, int) else int(size[0])
+        except Exception:
+            pass
+        return 256
 
-        model, _, preprocess = open_clip.create_model_and_transforms(
-            self._arch, pretrained=self._pretrained
-        )
-        model.to(device).eval()
-        self._model = model
+    def load(self, device: str) -> None:
+        import os
+        from pathlib import Path
+        import open_clip, torch 
+
+        model, _, preprocess = open_clip.create_model_and_transforms(self._arch, pretrained=self._pretrained)
+        try:
+            from timm.utils import reparameterize_model
+            model = reparameterize_model(model)
+        except ImportError:
+            pass
+        model.to(device).eval()   # ← 移到 reparameterize 之后
+
+        self._model = model                 # text 塔继续用
         self._preprocess = preprocess
         self._tokenizer = open_clip.get_tokenizer(self._arch)
         self._device = device
+
+        # ---- 图像塔：TRT engine 查找（文件名由模型名派生，不再硬编码） ----
+        self._trt = None
+        engine_name = f"{self.name}_img.engine"   # 例如 mobileclip2_s2_img.engine
+        for base in (os.environ.get("GO2_MODEL_DIR"), str(Path.cwd() / "models")):
+            if not base:
+                continue
+            engine_path = Path(base) / engine_name
+            if engine_path.is_file():
+                self._trt = _TrtImageEncoder(str(engine_path), device)
+                break
+
+        # ---- 预热：图像尺寸从模型自身读取，避免硬编码 ----
         with torch.no_grad():
-            dummy = torch.zeros((1, 3, 256, 256), device=device)
-            _ = model.encode_image(dummy)
+            _ = self._model.encode_text(self._tokenizer(["warmup"]).to(device))
+            if self._trt is None:
+                image_size = self._infer_image_size()
+                dummy = torch.zeros((1, 3, image_size, image_size), device=device)
+                _ = self._model.encode_image(dummy)
 
     def encode_images(
         self,
@@ -91,8 +133,12 @@ class MobileClipEncoder(EncoderBackend):
 
         batch = torch.stack([self._preprocess(c) for c in pil_crops]).to(self._device)
         with torch.no_grad():
-            feats = self._model.encode_image(batch)
-            feats = feats / feats.norm(dim=-1, keepdim=True).clamp_min(1e-6)
+            if self._trt is not None:
+                feats = self._trt.infer(batch)          # engine 内已含 L2 归一化
+                feats = feats.float()
+            else:
+                feats = self._model.encode_image(batch)
+                feats = feats / feats.norm(dim=-1, keepdim=True).clamp_min(1e-6)
         return EncoderOutput(
             image_embeddings=feats.detach().cpu().numpy().astype(np.float32),
             latency_ms=(time.perf_counter_ns() - start_ns) / 1e6,

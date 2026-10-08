@@ -31,7 +31,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image, RegionOfInterest
 from vision_msgs.msg import BoundingBox2D, Pose2D
 
-from .backends import make_detector, make_encoder, make_segmenter
+from .backends import SegmenterOutput, make_detector, make_encoder, make_segmenter
 from .depth_backproject import (
     CameraIntrinsics,
     mask_rle_encode,
@@ -248,7 +248,16 @@ class DetectorNode(Node):
             self._last_publish_ns = now_ns
             return
 
-        seg_out = self._segmenter.segment(color_bgr, det_out.boxes_xyxy)
+        if self._segmenter.name == "native":
+            if det_out.masks is None:
+                self.get_logger().warn(
+                    "native segmenter but detector returned no masks; skipping frame",
+                    throttle_duration_sec=5.0,
+                )
+                return
+            seg_out = SegmenterOutput(masks=det_out.masks, latency_ms=0.0)
+        else:
+            seg_out = self._segmenter.segment(color_bgr, det_out.boxes_xyxy)
         enc_out = self._encoder.encode_images(color_bgr, det_out.boxes_xyxy, seg_out.masks)
 
         t_bp0 = time.perf_counter_ns()
