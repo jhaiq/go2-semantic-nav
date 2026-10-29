@@ -26,3 +26,7 @@ tests/bags/
 bags/
 eval/results/
 
+GO2-seeing-eye-dog/
+go2-audio/
+go2_webrtc_connect/
+unitree_ui/
