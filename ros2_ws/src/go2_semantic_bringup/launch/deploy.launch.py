@@ -60,6 +60,9 @@ _ARGS = {
     "camera_info_topic": "/camera/color/camera_info",
     "use_sim_time": "false",
     "log_level": "info",
+    "detector_params": "",
+    "scene_graph_params": "",
+    "grounding_params": "",
 }
 
 
@@ -112,6 +115,9 @@ def generate_launch_description() -> LaunchDescription:
             "use_slam_fallback": "false",
             "use_sim_time": cfg["use_sim_time"],
             "log_level": cfg["log_level"],
+            "detector_params": cfg["detector_params"],
+            "scene_graph_params": cfg["scene_graph_params"],
+            "grounding_params": cfg["grounding_params"],
         }.items(),
     )
 

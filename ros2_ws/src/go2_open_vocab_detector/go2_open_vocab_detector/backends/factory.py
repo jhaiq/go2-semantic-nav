@@ -11,7 +11,7 @@ from .base import DetectorBackend, EncoderBackend, SegmenterBackend
 
 
 def make_detector(name: str) -> DetectorBackend:
-    if name in {"yolo_world_v2_s", "yolo_world_v2_m", "yolo_world_v2_l", "yolo_world_v2_x", "yoloe_11s"}:
+    if name in {"yolo_world_v2_s", "yolo_world_v2_m", "yolo_world_v2_l", "yolo_world_v2_x", "yoloe_11s" ,"yoloe_26s"}:
         from .ultralytics_detector import UltralyticsOpenVocabDetector
 
         return UltralyticsOpenVocabDetector(name)
@@ -31,6 +31,11 @@ def make_segmenter(name: str) -> SegmenterBackend:
         from .mobile_sam_segmenter import MobileSamSegmenter
 
         return MobileSamSegmenter(name)
+    
+    if name == "native":
+        from .native_segmenter import NativeSegmenter   # ← 懒加载 + 相对导入
+        return NativeSegmenter()
+
     if name == "nano_sam":
         from .nano_sam_segmenter import NanoSamSegmenter
 
@@ -51,7 +56,10 @@ def make_encoder(name: str) -> EncoderBackend:
         from .openclip_encoder import OpenClipEncoder
 
         return OpenClipEncoder(name)
-    if name in {"mobileclip_s0", "mobileclip_s1", "mobileclip_s2", "mobileclip_b"}:
+    if name in {
+                    "mobileclip_s0", "mobileclip_s1", "mobileclip_s2", "mobileclip_b",
+                    "mobileclip2_s0", "mobileclip2_s2", "mobileclip2_b",
+                }:
         from .mobileclip_encoder import MobileClipEncoder
 
         return MobileClipEncoder(name)

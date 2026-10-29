@@ -41,6 +41,8 @@ from rclpy.qos import QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from tf2_ros import Buffer, TransformException, TransformListener
 
+import rclpy.logging
+
 from .goal_sampler import SamplerParams, sample_stand_off
 from .query_parser import ParsedQuery, parse
 from .safety_gates import frame_error, freshness_error, publication_error
@@ -58,6 +60,8 @@ class GroundingNode(Node):
         super().__init__(
             "go2_language_grounding", parameter_overrides=parameter_overrides or []
         )
+
+        self.get_logger().set_level(rclpy.logging.LoggingSeverity.DEBUG)
 
         # --- parameters ---
         self.declare_parameter("map_frame", "map")
@@ -104,12 +108,28 @@ class GroundingNode(Node):
                                    "multiple legitimate candidates cluster together."
                                )))
 
+        self.declare_parameter("attr_delta_offset", 0.03)
+        self.declare_parameter("attr_delta_scale", 0.10)
+        self.declare_parameter("attr_label_veto_threshold", 0.1)
+
+        self.declare_parameter("score_weight_attr_clip", 0.4)
+        self.declare_parameter("score_weight_attr_label", 0.2)
+        self.declare_parameter("score_weight_attr_spatial", 0.4)
+        self.declare_parameter("spatial_distance_scale_m", 2.0,
+                               ParameterDescriptor(description=(
+                                   "Decay scale (metres) for the distance-based spatial score. "
+                                   "spatial_score = exp(-distance / scale). "
+                                   "Larger = flatter (distance matters less); "
+                                   "smaller = sharper (only very near objects score high)."
+                               )))
+
         # --- state ---
         self._latest_scene_graph: Optional[SceneGraph] = None
         self._latest_costmap: Optional[OccupancyGrid] = None
         self._scene_graph_received_ns = 0
         self._costmap_received_ns = 0
         self._encoder = None
+
         self._text_cache: dict[str, np.ndarray] = {}
 
         # --- pub/sub ---
@@ -118,9 +138,10 @@ class GroundingNode(Node):
             str(self.get_parameter("goal_pose_topic").value),
             _qos_reliable_depth10(),
         )
-        from visualization_msgs.msg import MarkerArray  # noqa: F401
+
+        from visualization_msgs.msg import MarkerArray
         self._pub_viz = self.create_publisher(
-            __import__("visualization_msgs.msg", fromlist=["MarkerArray"]).MarkerArray,
+            MarkerArray,
             str(self.get_parameter("grounding_viz_topic").value),
             _qos_reliable_depth10(),
         )
@@ -188,8 +209,11 @@ class GroundingNode(Node):
         self._costmap_received_ns = self.get_clock().now().nanoseconds
 
     def _runtime_gate_error(self) -> Optional[str]:
-        """Validate cached inputs using receipt time and frame contracts."""
         now_ns = self.get_clock().now().nanoseconds
+
+        if self._latest_scene_graph is None:
+            return "scene graph not received"
+
         graph_error = freshness_error(
             now_ns=now_ns,
             received_ns=self._scene_graph_received_ns,
@@ -198,8 +222,7 @@ class GroundingNode(Node):
         )
         if graph_error:
             return graph_error
-        if self._latest_scene_graph is None:
-            return "scene graph not received"
+
         minimum_objects = max(1, int(self.get_parameter("min_scene_graph_objects").value))
         object_count = len(self._latest_scene_graph.nodes)
         if object_count < minimum_objects:
@@ -216,6 +239,10 @@ class GroundingNode(Node):
 
         if not bool(self.get_parameter("use_costmap_gate").value):
             return None
+
+        if self._latest_costmap is None:
+            return "costmap not received"
+
         costmap_error = freshness_error(
             now_ns=now_ns,
             received_ns=self._costmap_received_ns,
@@ -224,8 +251,7 @@ class GroundingNode(Node):
         )
         if costmap_error:
             return costmap_error
-        if self._latest_costmap is None:
-            return "costmap not received"
+
         return frame_error(
             actual=self._latest_costmap.header.frame_id,
             expected=map_frame,
@@ -275,9 +301,21 @@ class GroundingNode(Node):
         )
 
         out: list[GroundingCandidate] = []
+        skipped = 0
+
+        offset = float(self.get_parameter("attr_delta_offset").value)
+        scale = float(self.get_parameter("attr_delta_scale").value)
+        veto = float(self.get_parameter("attr_label_veto_threshold").value)
+
+        robot_xyz = self._robot_xyz()   # Optional[np.ndarray]，TF 不可用时为 None
+        distance_scale = max(
+            float(self.get_parameter("spatial_distance_scale_m").value), 1e-3
+        )
+
         for node in graph.nodes:
             obj_emb = np.asarray(node.embedding, dtype=np.float32)
             if obj_emb.size == 0:
+                skipped += 1
                 continue
 
             sim_full = cosine_similarity(obj_emb, full_emb) if full_emb is not None else 0.0
@@ -286,19 +324,42 @@ class GroundingNode(Node):
             # reward the delta so the red one wins over a non-red chair.
             if plain_emb is not None:
                 sim_plain = cosine_similarity(obj_emb, plain_emb)
-                # Map [−0.2, +0.2] delta to [0, 1], clipped.
                 delta = sim_full - sim_plain
-                attr_bonus = max(0.0, min(1.0, (delta + 0.05) / 0.15))
-                # Blend base similarity with attribute bonus.
-                clip_score = 0.6 * sim_full + 0.4 * attr_bonus
+
+                delta_score = max(0.0, min(1.0, (delta + offset) / max(scale, 1e-6)))
+                label_score_for_gating = lexical_label_match(query.target_noun, node.label)
+                if label_score_for_gating < veto:
+                    clip_score = 0.3 * delta_score
+                else:
+                    clip_score = 0.7 * delta_score + 0.3 * sim_full
             else:
                 clip_score = sim_full
 
             label_score = lexical_label_match(query.target_noun, node.label)
 
-            # Spatial score: neutral at this stage. _apply_relation_filter may upgrade/downgrade.
-            spatial_score = 0.5
-            total = combine(clip_score, label_score, spatial_score, weights)
+            # Distance-aware spatial score: exp(-d / scale), 0..1.
+            # Falls back to neutral 0.5 when TF is unavailable.
+            distance_m: Optional[float] = None
+            if robot_xyz is not None:
+                p = node.pose.pose.position
+                distance_m = float(
+                    np.hypot(p.x - robot_xyz[0], p.y - robot_xyz[1])
+                )
+                spatial_score = float(np.exp(-distance_m / distance_scale))
+            else:
+                spatial_score = 0.5
+
+            # total = combine(clip_score, label_score, spatial_score, weights)
+            total = combine(clip_score, label_score, spatial_score, weights, has_attribute=bool(query.attribute))
+            distance_text = (
+                f"{distance_m:.2f}m" if distance_m is not None else "unavailable"
+            )
+
+            self.get_logger().debug(
+                f"{node.object_id[:8]} {node.label}: "
+                f"clip={clip_score:.3f} label={label_score:.3f} "
+                f"spatial={spatial_score:.3f} (d={distance_text}) total={total:.3f}"
+            )
 
             cand = GroundingCandidate()
             cand.object_id = node.object_id
@@ -309,6 +370,11 @@ class GroundingNode(Node):
             cand.score_spatial = float(spatial_score)
             cand.object_pose = node.pose
             out.append(cand)
+
+        if skipped:
+            self.get_logger().warn(
+                f"{skipped} scene-graph objects skipped (empty embedding)"
+            )
 
         out.sort(key=lambda c: c.score, reverse=True)
         return out
@@ -321,6 +387,8 @@ class GroundingNode(Node):
     ) -> list[GroundingCandidate]:
         if query.relation is None:
             return candidates
+
+        has_attr = bool(query.attribute)
 
         # Find a reference object (by lexical + CLIP on reference phrase).
         ref_attr_noun = (query.reference_attribute + " " + query.reference_noun).strip()
@@ -341,7 +409,14 @@ class GroundingNode(Node):
             if s > best_ref_score:
                 best_ref_score = s
                 best_ref = node
-        if best_ref is None:
+
+        # Do not hard-filter on a weak reference — fall back to unfiltered ranking.
+        min_ref_score = 0.2
+        if best_ref is None or best_ref_score < min_ref_score:
+            self.get_logger().warn(
+                f"relation reference not confidently found "
+                f"(best={best_ref_score:.2f} < {min_ref_score:.2f}); skipping filter"
+            )
             return candidates
 
         # Prefer edges of the requested type from the graph if available.
@@ -354,17 +429,24 @@ class GroundingNode(Node):
         if allowed_sources:
             filtered = [c for c in candidates if c.object_id in allowed_sources]
             if filtered:
+                weights = self._current_weights()
                 for c in filtered:
                     c.score_spatial = 1.0
                     c.score = combine(
-                        c.score_clip, c.score_label, c.score_spatial, self._current_weights()
+                        c.score_clip, c.score_label, c.score_spatial,
+                        weights, has_attribute=has_attr,
                     )
+                filtered.sort(key=lambda c: c.score, reverse=True)
                 return filtered
 
-        # Fallback: no spatial edges match — do not hard-filter, but penalise spatial score.
+        # Fallback: no spatial edges match — penalise spatial score, keep ranking.
+        weights = self._current_weights()
         for c in candidates:
             c.score_spatial = 0.2
-            c.score = combine(c.score_clip, c.score_label, c.score_spatial, self._current_weights())
+            c.score = combine(
+                c.score_clip, c.score_label, c.score_spatial,
+                weights, has_attribute=has_attr,
+            )
         candidates.sort(key=lambda c: c.score, reverse=True)
         return candidates
 
@@ -373,6 +455,9 @@ class GroundingNode(Node):
             clip=float(self.get_parameter("score_weight_clip").value),
             label=float(self.get_parameter("score_weight_label").value),
             spatial=float(self.get_parameter("score_weight_spatial").value),
+            attr_clip=float(self.get_parameter("score_weight_attr_clip").value),
+            attr_label=float(self.get_parameter("score_weight_attr_label").value),
+            attr_spatial=float(self.get_parameter("score_weight_attr_spatial").value),
         )
 
     # ---------------------------------------------------------- action
@@ -396,13 +481,18 @@ class GroundingNode(Node):
             return GoalResponse.REJECT
         return GoalResponse.ACCEPT
 
-    def _publish_feedback(self, goal_handle, state: str, candidates: list[GroundingCandidate], graph_count: int, distance: float = -1.0) -> None:
+    def _publish_feedback(
+        self, goal_handle, state: str,
+        candidates: list[GroundingCandidate],
+        graph_count: int, distance: float = -1.0,
+    ) -> None:
         fb = GroundAndNavigate.Feedback()
         fb.state = state
         fb.grounding_confidence = candidates[0].score if candidates else 0.0
         fb.scene_graph_object_count = graph_count
         fb.current_target_id = candidates[0].object_id if candidates else ""
-        fb.current_candidates = list(candidates[:5])
+        # Only carry full candidate payload outside of high-frequency NAVIGATING.
+        fb.current_candidates = list(candidates[:5]) if state != "NAVIGATING" else []
         fb.distance_to_goal_m = float(distance)
         goal_handle.publish_feedback(fb)
 
@@ -431,9 +521,15 @@ class GroundingNode(Node):
             return self._abort_result(
                 goal_handle, "GROUNDING_FAILED", "no scene graph available", start_ns
             )
-
-        parsed = parse(req.text_query)
-        if req.preferred_relation:
+        try:
+            parsed = parse(req.text_query)
+        except Exception as exc:
+            return self._abort_result(
+                goal_handle, "GROUNDING_FAILED",
+                f"failed to parse text_query {req.text_query!r}: {exc}",
+                start_ns,
+            )
+        if req.preferred_relation.strip(): 
             parsed.relation = req.preferred_relation
         weights = self._current_weights()
 
@@ -446,6 +542,10 @@ class GroundingNode(Node):
             )
 
         candidates = self._apply_relation_filter(candidates, parsed, graph)
+
+        if req.top_k > 0:
+            candidates = candidates[: int(req.top_k)]
+        
         self._publish_feedback(goal_handle, "SCORING", candidates, len(graph.nodes))
         if goal_handle.is_cancel_requested:
             return self._cancel_result(goal_handle, start_ns)
@@ -548,7 +648,7 @@ class GroundingNode(Node):
                 len(graph.nodes),
                 top,
                 start_ns,
-                float(req.timeout_seconds),
+                float(req.timeout_seconds)
             )
 
         total_s = (time.monotonic_ns() - start_ns) / 1e9
@@ -626,6 +726,7 @@ class GroundingNode(Node):
                 start_ns,
                 final_candidates=candidates[:5],
                 chosen=chosen,
+                final_goal=goal_pose
             )
 
         server_timeout = float(
@@ -639,6 +740,7 @@ class GroundingNode(Node):
                 start_ns,
                 final_candidates=candidates[:5],
                 chosen=chosen,
+                final_goal=goal_pose
             )
 
         nav_goal = NavigateToPose.Goal()
@@ -655,10 +757,11 @@ class GroundingNode(Node):
         )
         while rclpy.ok() and not send_future.done():
             if goal_handle.is_cancel_requested:
-                return self._cancel_result(goal_handle, start_ns)
+                return self._cancel_result(goal_handle, start_ns, final_goal=goal_pose)
             if self._action_timed_out(start_ns, request_timeout_s):
                 return self._abort_result(
-                    goal_handle, "TIMED_OUT", "navigation dispatch timed out", start_ns
+                    goal_handle, "TIMED_OUT", "navigation dispatch timed out", start_ns,
+                    final_goal=goal_pose,
                 )
             time.sleep(0.02)
 
@@ -671,13 +774,14 @@ class GroundingNode(Node):
                 start_ns,
                 final_candidates=candidates[:5],
                 chosen=chosen,
+                final_goal=goal_pose
             )
 
         result_future = nav_handle.get_result_async()
         while rclpy.ok() and not result_future.done():
             if goal_handle.is_cancel_requested:
                 cancel_note = self._cancel_navigation(nav_handle)
-                return self._cancel_result(goal_handle, start_ns, cancel_note)
+                return self._cancel_result(goal_handle, start_ns, cancel_note, final_goal=goal_pose)
             runtime_error = self._runtime_gate_error()
             if runtime_error:
                 cancel_note = self._cancel_navigation(nav_handle)
@@ -688,6 +792,7 @@ class GroundingNode(Node):
                     start_ns,
                     final_candidates=candidates[:5],
                     chosen=chosen,
+                    final_goal=goal_pose
                 )
             if self._action_timed_out(start_ns, request_timeout_s):
                 cancel_note = self._cancel_navigation(nav_handle)
@@ -698,6 +803,7 @@ class GroundingNode(Node):
                     start_ns,
                     final_candidates=candidates[:5],
                     chosen=chosen,
+                    final_goal=goal_pose
                 )
             time.sleep(0.02)
 
@@ -711,7 +817,7 @@ class GroundingNode(Node):
             goal_handle.succeed()
             return result
         if status == GoalStatus.STATUS_CANCELED:
-            return self._cancel_result(goal_handle, start_ns)
+            return self._cancel_result(goal_handle, start_ns,final_goal=goal_pose)
         return self._abort_result(
             goal_handle,
             "NAV_ABORTED",
@@ -719,6 +825,7 @@ class GroundingNode(Node):
             start_ns,
             final_candidates=candidates[:5],
             chosen=chosen,
+            final_goal=goal_pose,          # ← 补
         )
 
     def _success_result(
@@ -747,22 +854,12 @@ class GroundingNode(Node):
             limit_s = min(limit_s, configured_limit)
         return limit_s > 0.0 and (time.monotonic_ns() - start_ns) / 1e9 > limit_s
 
-    def _abort_result(
-        self,
-        goal_handle,
-        terminal_state: str,
-        message: str,
-        start_ns: int,
-        final_candidates: Optional[list[GroundingCandidate]] = None,
-        chosen: Optional[GroundingCandidate] = None,
-    ) -> GroundAndNavigate.Result:
+    def _abort_result(self, goal_handle, terminal_state, message, start_ns,
+            final_candidates=None, chosen=None, final_goal=None):
         goal_handle.abort()
         return self._fail_result(
-            terminal_state,
-            message,
-            start_ns,
-            final_candidates=final_candidates,
-            chosen=chosen,
+            terminal_state, message, start_ns,
+            final_candidates=final_candidates, chosen=chosen, final_goal=final_goal,
         )
 
     def _cancel_navigation(self, nav_handle) -> str:
@@ -786,12 +883,10 @@ class GroundingNode(Node):
         self.get_logger().error(note)
         return note
 
-    def _cancel_result(
-        self, goal_handle, start_ns: int, note: str = ""
-    ) -> GroundAndNavigate.Result:
+    def _cancel_result(self, goal_handle, start_ns, note="", final_goal=None, chosen=None):
         goal_handle.canceled()
         message = f"goal canceled; {note}" if note else "goal canceled"
-        return self._fail_result("CANCELED", message, start_ns)
+        return self._fail_result("CANCELED", message, start_ns, final_goal=final_goal, chosen=chosen)
 
     def _fail_result(
         self,
@@ -800,6 +895,7 @@ class GroundingNode(Node):
         start_ns: int,
         final_candidates: Optional[list[GroundingCandidate]] = None,
         chosen: Optional[GroundingCandidate] = None,
+        final_goal: Optional[PoseStamped] = None,
     ) -> GroundAndNavigate.Result:
         result = GroundAndNavigate.Result()
         result.success = False
@@ -809,7 +905,10 @@ class GroundingNode(Node):
         result.grounding_score = chosen.score if chosen else 0.0
         result.terminal_state = terminal_state
         result.total_latency_s = (time.monotonic_ns() - start_ns) / 1e9
-        # final_goal left as default PoseStamped
+        
+        if final_goal is not None:
+            result.final_goal = final_goal
+
         return result
 
 

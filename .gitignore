@@ -22,3 +22,7 @@ tests/bags/
 .idea/
 .DS_Store
 .claude/
+.git
+bags/
+eval/results/
+

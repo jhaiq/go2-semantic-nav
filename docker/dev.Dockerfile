@@ -35,7 +35,6 @@ RUN pip install --upgrade pip \
     "numpy<2.0" \
     ultralytics>=8.4.0 \
     open_clip_torch>=2.24.0 \
-    mobile-sam \
     networkx>=3.2 \
     scipy>=1.11.0 \
     opencv-python>=4.8.0 \
@@ -43,6 +42,23 @@ RUN pip install --upgrade pip \
     pytest \
     ruff \
     black
+# --- MobileSAM（aarch64 无 wheel，锁 commit，浅克隆） ---
+ARG MOBILESAM_COMMIT=f706ad9c4eb7f219c00d9050e46328518ffb65d2  # 换成你验证过的 SHA
+RUN git clone --depth 1 https://github.com/ChaoningZhang/MobileSAM.git /opt/MobileSAM \
+ && cd /opt/MobileSAM && git fetch --depth 1 origin ${MOBILESAM_COMMIT} \
+ && git checkout ${MOBILESAM_COMMIT} \
+ && python3 -m pip install . \
+ && rm -rf /opt/MobileSAM/.git
 
+# --- NanoSAM（editable 安装需要保留源码目录） ---
+ARG NANOSAM_COMMIT=653633614b2eb93b06ba3be9adb2aeffb117bd72
+RUN git clone --depth 1 https://github.com/NVIDIA-AI-IOT/nanosam.git /opt/nanosam \
+ && cd /opt/nanosam && git checkout ${NANOSAM_COMMIT} \
+ && python3 -m pip install -e .
+
+# --- 入口：source ROS 2 + workspace，替代 .bashrc 黑魔法 ---
+COPY docker/ros_entrypoint.sh /ros_entrypoint.sh
+RUN chmod +x /ros_entrypoint.sh
 WORKDIR /workspace
-CMD ["/bin/bash"]
+ENTRYPOINT ["/ros_entrypoint.sh"]
+CMD ["bash"]

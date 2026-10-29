@@ -43,9 +43,13 @@ def generate_launch_description() -> LaunchDescription:
     grounding_share = get_package_share_directory("go2_language_grounding")
     bringup_share = get_package_share_directory("go2_semantic_bringup")
 
-    default_detector_yaml = os.path.join(detector_share, "config", "detector.yaml")
-    default_scene_graph_yaml = os.path.join(scene_graph_share, "config", "scene_graph.yaml")
-    default_grounding_yaml = os.path.join(grounding_share, "config", "grounding.yaml")
+    default_detector_yaml = os.path.join(detector_share, "config", "detector_jeson.yaml")
+    default_scene_graph_yaml = os.path.join(scene_graph_share, "config", "scene_graph_jeson.yaml")
+    default_grounding_yaml = os.path.join(grounding_share, "config", "grounding_jeson.yaml")
+
+    # default_detector_yaml = os.path.join(detector_share, "config", "detector.yaml")
+    # default_scene_graph_yaml = os.path.join(scene_graph_share, "config", "scene_graph.yaml")
+    # default_grounding_yaml = os.path.join(grounding_share, "config", "grounding.yaml")
     default_rviz = os.path.join(bringup_share, "rviz", "semantic_nav.rviz")
 
     args = [
@@ -87,7 +91,6 @@ def generate_launch_description() -> LaunchDescription:
         output="screen",
         emulate_tty=True,
         parameters=[
-            LaunchConfiguration("detector_params"),
             {
                 "device": LaunchConfiguration("device"),
                 "detector_backend": LaunchConfiguration("backend"),
@@ -101,6 +104,7 @@ def generate_launch_description() -> LaunchDescription:
                 "require_aligned_depth": LaunchConfiguration("require_aligned_depth"),
                 "use_sim_time": LaunchConfiguration("use_sim_time"),
             },
+            LaunchConfiguration("detector_params"),
         ],
         arguments=["--ros-args", "--log-level", LaunchConfiguration("log_level")],
         condition=IfCondition(LaunchConfiguration("enable_detector")),
@@ -113,11 +117,11 @@ def generate_launch_description() -> LaunchDescription:
         output="screen",
         emulate_tty=True,
         parameters=[
-            LaunchConfiguration("scene_graph_params"),
             {
                 "publish_rate_hz": LaunchConfiguration("publish_rate_hz"),
                 "use_sim_time": LaunchConfiguration("use_sim_time"),
             },
+            LaunchConfiguration("scene_graph_params"),
         ],
         arguments=["--ros-args", "--log-level", LaunchConfiguration("log_level")],
         condition=IfCondition(LaunchConfiguration("enable_scene_graph")),
@@ -130,7 +134,6 @@ def generate_launch_description() -> LaunchDescription:
         output="screen",
         emulate_tty=True,
         parameters=[
-            LaunchConfiguration("grounding_params"),
             {
                 "device": LaunchConfiguration("device"),
                 "encoder_backend": LaunchConfiguration("encoder"),
@@ -140,6 +143,7 @@ def generate_launch_description() -> LaunchDescription:
                 "navigate_to_pose_action": LaunchConfiguration("navigate_to_pose_action"),
                 "use_sim_time": LaunchConfiguration("use_sim_time"),
             },
+             LaunchConfiguration("grounding_params"),
         ],
         arguments=["--ros-args", "--log-level", LaunchConfiguration("log_level")],
         condition=IfCondition(LaunchConfiguration("enable_grounding")),

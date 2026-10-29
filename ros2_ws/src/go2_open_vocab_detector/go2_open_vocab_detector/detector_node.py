@@ -31,7 +31,7 @@ from rclpy.node import Node
 from sensor_msgs.msg import CameraInfo, Image, RegionOfInterest
 from vision_msgs.msg import BoundingBox2D, Pose2D
 
-from .backends import make_detector, make_encoder, make_segmenter
+from .backends import SegmenterOutput, make_detector, make_encoder, make_segmenter
 from .depth_backproject import (
     CameraIntrinsics,
     mask_rle_encode,
@@ -79,9 +79,9 @@ class DetectorNode(Node):
         self.declare_parameter("max_depth_m", 8.0)
         self.declare_parameter("prompts", _DEFAULT_PROMPTS)
         self.declare_parameter("prompt_classes_file", "")
-        self.declare_parameter("image_topic", "/camera/color/image_raw")
-        self.declare_parameter("depth_topic", "/camera/depth/image_rect_raw")
-        self.declare_parameter("camera_info_topic", "/camera/color/camera_info")
+        self.declare_parameter("image_topic", "/camera/camera/color/image_raw")
+        self.declare_parameter("depth_topic", "/camera/camera/depth/image_rect_raw")
+        self.declare_parameter("camera_info_topic", "/camera/camera/color/camera_info")
         self.declare_parameter("require_aligned_depth", True)
         self.declare_parameter("sync_slop_sec", 0.05)
         self.declare_parameter("mask_downsample", 1)
@@ -248,7 +248,16 @@ class DetectorNode(Node):
             self._last_publish_ns = now_ns
             return
 
-        seg_out = self._segmenter.segment(color_bgr, det_out.boxes_xyxy)
+        if self._segmenter.name == "native":
+            if det_out.masks is None:
+                self.get_logger().warn(
+                    "native segmenter but detector returned no masks; skipping frame",
+                    throttle_duration_sec=5.0,
+                )
+                return
+            seg_out = SegmenterOutput(masks=det_out.masks, latency_ms=0.0)
+        else:
+            seg_out = self._segmenter.segment(color_bgr, det_out.boxes_xyxy)
         enc_out = self._encoder.encode_images(color_bgr, det_out.boxes_xyxy, seg_out.masks)
 
         t_bp0 = time.perf_counter_ns()

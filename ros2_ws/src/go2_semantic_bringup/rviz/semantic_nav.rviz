@@ -27,7 +27,7 @@ Visualization Manager:
       Topic:
         Depth: 1
         Reliability Policy: Best Effort
-        Value: /camera/color/image_raw
+        Value: /camera/camera/color/image_raw
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
       Name: SemanticObjects

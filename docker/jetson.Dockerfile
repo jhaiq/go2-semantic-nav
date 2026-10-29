@@ -9,11 +9,24 @@
 #     -v "$PWD:/workspace" \
 #     -v "$HOME/.cache:/home/ros/.cache" \
 #     go2-semantic-nav:jetson
+
+# # Jetson 本机构建（老版本 Docker 需显式开启 BuildKit 才能用 cache mount）
+# DOCKER_BUILDKIT=1 docker build -f docker/jetson.Dockerfile -t go2-semantic-nav:jetson .
+
+# docker run --rm -it --runtime nvidia --network host \
+#   -v "$PWD:/workspace" \
+#   -v "$HOME/.cache:/root/.cache" \
+#   go2-semantic-nav:jetson
+
+# syntax=docker/dockerfile:1
 FROM nvcr.io/nvidia/l4t-pytorch:r36.2.0-pth2.3-py3
 
-ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND=noninteractive \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 ARG ROS_DISTRO=humble
 
+# --- 基础工具 ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl gnupg lsb-release software-properties-common \
     git build-essential cmake pkg-config \
@@ -21,9 +34,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libeigen3-dev \
  && rm -rf /var/lib/apt/lists/*
 
-# --- ROS 2 Humble on Ubuntu 22.04 (Jammy, JetPack 6.x) ---
-RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | gpg --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg \
- && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu jammy main" > /etc/apt/sources.list.d/ros2.list \
+# --- ROS 2 Humble (Jammy / JetPack 6.x) ---
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc \
+    | gpg --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg \
+ && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu jammy main" \
+    > /etc/apt/sources.list.d/ros2.list \
  && apt-get update && apt-get install -y --no-install-recommends \
     ros-${ROS_DISTRO}-ros-base \
     ros-${ROS_DISTRO}-nav2-bringup \
@@ -34,32 +49,35 @@ RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | g
     python3-colcon-common-extensions \
  && rm -rf /var/lib/apt/lists/*
 
-# --- Python ML stack ---
-# IMPORTANT: torch is already in the base image; do NOT reinstall it — pip will
-# replace the Jetson-optimized wheel with a CPU-only one.
-RUN pip install --upgrade pip \
- && pip install \
-    "numpy<2.0" \
-    ultralytics>=8.4.0 \
-    open_clip_torch>=2.24.0 \
-    networkx>=3.2 \
-    scipy>=1.11.0 \
-    opencv-python>=4.8.0 \
-    pyyaml \
-    pytest \
- && pip install --no-binary=:all: sentencepiece
+# --- Python ML 依赖（锁版本，见下方 requirements） ---
+# torch 已在基础镜像中，绝不重装；numpy<2 匹配 Jetson 编译版 torch。
+# BuildKit 缓存挂载：pip 下载在重建间复用，大幅加速。
+# clip 预装：避免 YOLO-World 首次推理时联网安装导致 hang。
+COPY docker/requirements-jetson.txt /tmp/requirements-jetson.txt
 
-# MobileSAM from source (x86 wheel won't run on aarch64).
-RUN pip install git+https://github.com/ChaoningZhang/MobileSAM.git
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python3 -m pip install --upgrade "pip==24.0" \
+        --index-url https://pypi.org/simple \
+ && python3 -m pip install -r /tmp/requirements-jetson.txt \
+        --index-url https://pypi.org/simple
 
-# NanoSAM (Jetson-native TRT segmenter).
-RUN cd /opt && git clone --depth 1 https://github.com/NVIDIA-AI-IOT/nanosam.git \
- && cd nanosam && pip install -e .
+# --- MobileSAM（aarch64 无 wheel，锁 commit，浅克隆） ---
+ARG MOBILESAM_COMMIT=f706ad9c4eb7f219c00d9050e46328518ffb65d2  # 换成你验证过的 SHA
+RUN git clone --depth 1 https://github.com/ChaoningZhang/MobileSAM.git /opt/MobileSAM \
+ && cd /opt/MobileSAM && git fetch --depth 1 origin ${MOBILESAM_COMMIT} \
+ && git checkout ${MOBILESAM_COMMIT} \
+ && python3 -m pip install . \
+ && rm -rf /opt/MobileSAM/.git
 
-# Default shell sources ROS 2 + any workspace mounted at /workspace/install.
-RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc \
- && echo "[ -f /workspace/ros2_ws/install/setup.bash ] && source /workspace/ros2_ws/install/setup.bash" >> /root/.bashrc \
- && echo "export OMP_NUM_THREADS=4" >> /root/.bashrc
+# --- NanoSAM（editable 安装需要保留源码目录） ---
+ARG NANOSAM_COMMIT=653633614b2eb93b06ba3be9adb2aeffb117bd72
+RUN git clone --depth 1 https://github.com/NVIDIA-AI-IOT/nanosam.git /opt/nanosam \
+ && cd /opt/nanosam && git checkout ${NANOSAM_COMMIT} \
+ && python3 -m pip install -e .
 
+# --- 入口：source ROS 2 + workspace，替代 .bashrc 黑魔法 ---
+COPY docker/ros_entrypoint.sh /ros_entrypoint.sh
+RUN chmod +x /ros_entrypoint.sh
 WORKDIR /workspace
-CMD ["/bin/bash"]
+ENTRYPOINT ["/ros_entrypoint.sh"]
+CMD ["bash"]
