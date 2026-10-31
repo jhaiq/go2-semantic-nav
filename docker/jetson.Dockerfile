@@ -7,7 +7,7 @@
 # Run:
 #   docker run --rm -it --runtime nvidia --network host \
 #     -v "$PWD:/workspace" \
-#     -v "$HOME/.cache:/home/ros/.cache" \
+#     -v "$HOME/.cache:/root/.cache" \
 #     go2-semantic-nav:jetson
 
 # # Jetson 本机构建（老版本 Docker 需显式开启 BuildKit 才能用 cache mount）
@@ -24,7 +24,6 @@ FROM nvcr.io/nvidia/l4t-pytorch:r36.2.0-pth2.3-py3
 ENV DEBIAN_FRONTEND=noninteractive \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
-ARG ROS_DISTRO=humble
 
 # --- 基础工具 ---
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -34,20 +33,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libeigen3-dev \
  && rm -rf /var/lib/apt/lists/*
 
-# --- ROS 2 Humble (Jammy / JetPack 6.x) ---
-RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc \
-    | gpg --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg \
- && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] http://packages.ros.org/ros2/ubuntu jammy main" \
-    > /etc/apt/sources.list.d/ros2.list \
+# --- AGIROS loong (Jammy / JetPack 6.x, aarch64) ---
+# AGIROS 发布 jammy 的 aarch64 构建;源配置复刻官方安装器
+# http://repo.agiros.org.cn/debrepo/agiros/ubuntu2204lts/2606/install.sh (trusted=yes)。
+# CLI 为 agiros(等价 ros2 参数),rosdep 由 agirosdep 替代。
+RUN echo "deb [arch=$(dpkg --print-architecture) trusted=yes] http://repo.agiros.org.cn/debrepo/agiros/ubuntu2204lts/2606 jammy main" \
+    > /etc/apt/sources.list.d/agiros.list \
  && apt-get update && apt-get install -y --no-install-recommends \
-    ros-${ROS_DISTRO}-ros-base \
-    ros-${ROS_DISTRO}-nav2-bringup \
-    ros-${ROS_DISTRO}-cv-bridge \
-    ros-${ROS_DISTRO}-tf2-ros \
-    ros-${ROS_DISTRO}-vision-msgs \
-    ros-${ROS_DISTRO}-rviz2 \
+    agiros-loong-ros-base \
+    agiros-loong-nav2-bringup \
+    agiros-loong-cv-bridge \
+    agiros-loong-tf2-ros \
+    agiros-loong-vision-msgs \
+    agiros-loong-rviz2 \
     python3-colcon-common-extensions \
- && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/* \
+ && python3 -m pip install http://repo.agiros.org.cn/yumrepo/agiros/agirosdep/agirosdep-0.25.1-py3-none-any.whl \
+ && agirosdep init && agirosdep update
 
 # --- Python ML 依赖（锁版本，见下方 requirements） ---
 # torch 已在基础镜像中，绝不重装；numpy<2 匹配 Jetson 编译版 torch。
@@ -75,7 +77,7 @@ RUN git clone --depth 1 https://github.com/NVIDIA-AI-IOT/nanosam.git /opt/nanosa
  && cd /opt/nanosam && git checkout ${NANOSAM_COMMIT} \
  && python3 -m pip install -e .
 
-# --- 入口：source ROS 2 + workspace，替代 .bashrc 黑魔法 ---
+# --- 入口：source AGIROS + workspace，替代 .bashrc 黑魔法 ---
 COPY docker/ros_entrypoint.sh /ros_entrypoint.sh
 RUN chmod +x /ros_entrypoint.sh
 WORKDIR /workspace
