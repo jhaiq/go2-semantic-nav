@@ -1,7 +1,7 @@
 """
 deploy.launch.py: semantic navigation on the GO2 motion-authority stack.
 
-    ros2 launch go2_semantic_bringup deploy.launch.py \\
+    agiros launch go2_semantic_bringup deploy.launch.py \\
         planner:=nav2 localization:=slam_mapping hardware_adapter:=dry_run
 
 Brings up, in one graph:

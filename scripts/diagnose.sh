@@ -23,7 +23,7 @@ echo "[diagnose] writing bundle to $OUT"
 
 # Ensure ROS is sourced (idempotent).
 if [[ -z "${ROS_DISTRO:-}" ]]; then
-  source /opt/ros/humble/setup.bash
+  source /opt/agiros/loong/setup.bash
 fi
 
 # --- Environment ---
@@ -46,10 +46,10 @@ git -C "$REPO_ROOT" status --short >> "$OUT/03_revision.txt" 2>&1 || true
 (command -v tegrastats >/dev/null && timeout 2 tegrastats --interval 1000 > "$OUT/02_tegrastats.txt" 2>&1) || true
 
 # --- ROS graph ---
-timeout 5 ros2 node list > "$OUT/10_nodes.txt" 2>&1 || true
-timeout 5 ros2 topic list -t > "$OUT/11_topics.txt" 2>&1 || true
-timeout 5 ros2 service list > "$OUT/12_services.txt" 2>&1 || true
-timeout 5 ros2 action list > "$OUT/13_actions.txt" 2>&1 || true
+timeout 5 agiros node list > "$OUT/10_nodes.txt" 2>&1 || true
+timeout 5 agiros topic list -t > "$OUT/11_topics.txt" 2>&1 || true
+timeout 5 agiros service list > "$OUT/12_services.txt" 2>&1 || true
+timeout 5 agiros action list > "$OUT/13_actions.txt" 2>&1 || true
 
 # --- Required topic health ---
 {
@@ -62,14 +62,14 @@ timeout 5 ros2 action list > "$OUT/13_actions.txt" 2>&1 || true
       /global_costmap/costmap \
       /goal_pose; do
     echo "=== hz $topic (5s) ==="
-    timeout 5 ros2 topic hz "$topic" 2>&1 | head -8 || true
+    timeout 5 agiros topic hz "$topic" 2>&1 | head -8 || true
     echo
   done
 } > "$OUT/20_topic_rates.txt"
 
 # --- TF tree (takes 5 s to listen) ---
-timeout 8 ros2 run tf2_tools view_frames -o "$OUT/30_tf" > /dev/null 2>&1 || true
-# The tool writes frames.pdf + frames.gv to cwd in older Humble; move if present.
+timeout 8 agiros run tf2_tools view_frames -o "$OUT/30_tf" > /dev/null 2>&1 || true
+# The tool writes frames.pdf + frames.gv to cwd in older distro generations; move if present.
 for f in frames.pdf frames.gv; do
   [[ -f "$f" ]] && mv "$f" "$OUT/30_$f"
 done
@@ -77,14 +77,14 @@ done
 # --- Verbose QoS dump on semantic topics ---
 for topic in /semantic/detections /semantic/scene_graph /goal_pose; do
   echo "=== topic info -v $topic ===" >> "$OUT/40_qos.txt"
-  timeout 3 ros2 topic info --verbose "$topic" >> "$OUT/40_qos.txt" 2>&1 || true
+  timeout 3 agiros topic info --verbose "$topic" >> "$OUT/40_qos.txt" 2>&1 || true
   echo >> "$OUT/40_qos.txt"
 done
 
 # --- Runtime configuration (these are standard nodes, not lifecycle nodes) ---
 for node in go2_open_vocab_detector go2_scene_graph go2_language_grounding; do
   echo "=== parameters $node ===" >> "$OUT/41_parameters.txt"
-  timeout 5 ros2 param dump "/$node" >> "$OUT/41_parameters.txt" 2>&1 || \
+  timeout 5 agiros param dump "/$node" >> "$OUT/41_parameters.txt" 2>&1 || \
     echo "(node not present)" >> "$OUT/41_parameters.txt"
   echo >> "$OUT/41_parameters.txt"
 done

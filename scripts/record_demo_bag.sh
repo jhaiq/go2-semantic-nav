@@ -18,7 +18,7 @@ COLOR_TOPIC="${COLOR_TOPIC:-/camera/color/image_raw}"
 DEPTH_TOPIC="${DEPTH_TOPIC:-/camera/depth/image_rect_raw}"
 CAMERA_INFO_TOPIC="${CAMERA_INFO_TOPIC:-/camera/color/camera_info}"
 
-source /opt/ros/humble/setup.bash
+source /opt/agiros/loong/setup.bash
 if [[ -f "$HOME/ros2_ws/install/setup.bash" ]]; then
   source "$HOME/ros2_ws/install/setup.bash"
 fi
@@ -59,7 +59,7 @@ $DEPTH_TOPIC:
   depth: 1
 EOF
 
-ros2 bag record -o "$OUT" \
+agiros bag record -o "$OUT" \
   --qos-profile-overrides-path "$QOS_FILE" \
   --compression-mode file --compression-format zstd \
   "${TOPICS[@]}"

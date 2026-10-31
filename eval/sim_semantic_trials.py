@@ -63,8 +63,8 @@ def _surface_distance(px: float, py: float, obj: dict) -> float:
 def _launch(domain: int, planner: str, world: str, log: Path) -> subprocess.Popen:
     env = dict(os.environ, ROS_DOMAIN_ID=str(domain), ROS_LOCALHOST_ONLY="1")
     cmd = (
-        f"ros2 launch go2_sim sim.launch.py world_file:={world} & sleep 2; "
-        f"ros2 launch go2_semantic_bringup deploy.launch.py planner:={planner} "
+        f"agiros launch go2_sim sim.launch.py world_file:={world} & sleep 2; "
+        f"agiros launch go2_semantic_bringup deploy.launch.py planner:={planner} "
         "localization:=slam_mapping hardware_adapter:=unitree_sport allow_goal_publication:=true "
         "enable_detector:=false enable_scene_graph:=false & "
         f"python3 {REPO}/scripts/sim_scene_graph.py {world} & wait"

@@ -126,23 +126,22 @@ def main() -> int:
         from go2_open_vocab_detector.detector_node import DetectorNode
         from go2_scene_graph.scene_graph_node import SceneGraphNode
 
-        detector = DetectorNode()
-        detector.set_parameters([
+        # Nodes load their backends eagerly in __init__, so overrides must be
+        # passed at construction — post-hoc set_parameters would arrive too late.
+        detector = DetectorNode(parameter_overrides=[
             p_mod.Parameter("detector_backend", p_mod.Parameter.Type.STRING, args.detector),
             p_mod.Parameter("segmenter_backend", p_mod.Parameter.Type.STRING, args.segmenter),
             p_mod.Parameter("encoder_backend", p_mod.Parameter.Type.STRING, args.encoder),
             p_mod.Parameter("device", p_mod.Parameter.Type.STRING, args.device),
         ])
 
-        scene_graph = SceneGraphNode()
-        scene_graph.set_parameters([
+        scene_graph = SceneGraphNode(parameter_overrides=[
             p_mod.Parameter("min_observations_to_publish", p_mod.Parameter.Type.INTEGER, 1),
             p_mod.Parameter("assoc_embed_threshold", p_mod.Parameter.Type.DOUBLE, 0.5),
             p_mod.Parameter("publish_rate_hz", p_mod.Parameter.Type.DOUBLE, 4.0),
         ])
 
-        grounding = GroundingNode()
-        grounding.set_parameters([
+        grounding = GroundingNode(parameter_overrides=[
             p_mod.Parameter("encoder_backend", p_mod.Parameter.Type.STRING, args.encoder),
             p_mod.Parameter("device", p_mod.Parameter.Type.STRING, args.device),
             p_mod.Parameter("use_costmap_gate", p_mod.Parameter.Type.BOOL, False),
@@ -154,8 +153,8 @@ def main() -> int:
         for n in (detector, scene_graph, grounding, watcher):
             executor.add_node(n)
 
-        print("[smoke] waiting up to 60 s for scene graph to populate ...")
-        sg = _wait_for_scene_graph(watcher, executor, timeout_s=60.0)
+        print(f"[smoke] waiting up to {args.timeout:.0f} s for scene graph to populate ...")
+        sg = _wait_for_scene_graph(watcher, executor, timeout_s=args.timeout)
         if sg is None:
             print("[smoke] FAIL: no SceneGraph message received in 60 s")
             return 2

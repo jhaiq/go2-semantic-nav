@@ -1,7 +1,7 @@
 """Top-level launch for go2-semantic-nav: detector + scene_graph + grounding + RViz preset.
 
 This launch does NOT start RealSense, Nav2, or the GO2-seeing-eye-dog stack. Those must
-already be running (via `ros2 launch go2_bringup go2_full.launch.py ...`) or be replayed
+already be running (via `agiros launch go2_bringup go2_full.launch.py ...`) or be replayed
 from a rosbag before this launch is invoked.
 
 Args:
@@ -80,7 +80,7 @@ def generate_launch_description() -> LaunchDescription:
         DeclareLaunchArgument("scene_graph_params", default_value=default_scene_graph_yaml),
         DeclareLaunchArgument("grounding_params", default_value=default_grounding_yaml),
         DeclareLaunchArgument("use_sim_time", default_value="false",
-                              description="Set on all nodes; pair with `ros2 bag play --clock` when replaying a bag"),
+                              description="Set on all nodes; pair with `agiros bag play --clock` when replaying a bag"),
         DeclareLaunchArgument("log_level", default_value="info"),
     ]
 

@@ -4,19 +4,19 @@
 Proves the rosbag pathway that Phase 5 relies on, without needing robot hardware:
 
   1. Start the synthetic publisher.
-  2. `ros2 bag record` the required topic set for ~N seconds.
+  2. `agiros bag record` the required topic set for ~N seconds.
   3. Stop the publisher.
-  4. `ros2 bag play` the recorded bag in a loop.
+  4. `agiros bag play` the recorded bag in a loop.
   5. Run the 3 semantic-nav nodes + grounding action.
   6. Assert the grounding action returns success=True on a known-to-work query.
 
-**Known limitation (documented 2026-04-13):** ros2 bag play replays messages with
+**Known limitation (documented 2026-04-13):** agiros bag play replays messages with
 their ORIGINAL timestamps (from the recording). ROS 2 subscribers consume them
 against wall-clock time by default, so TF lookups in `scene_graph_node` fail
 because the requested `stamp` predates the TF cache window. Two-process fix:
-pass `--clock` to `ros2 bag play` AND set `use_sim_time:=true` on all subscriber
+pass `--clock` to `agiros bag play` AND set `use_sim_time:=true` on all subscriber
 nodes. A cleaner Phase 5 path is to record from the real robot (where `/tf` is
-live) and replay with `ros2 bag play --clock --rate 1.0` + `use_sim_time:=true`.
+live) and replay with `agiros bag play --clock --rate 1.0` + `use_sim_time:=true`.
 
 For hardware-free CI validation, use `scripts/smoke_test_integration.py` — it
 uses the live synthetic publisher (not a bag) so wall-clock TFs work fine.
@@ -76,7 +76,7 @@ def _record_bag(record_duration_s: float, bag_path: Path, publisher_rate_hz: flo
     )
     print(f"[record] recording {len(topics)} topics for {record_duration_s} s → {bag_path}")
     rec = subprocess.Popen(
-        ["ros2", "bag", "record",
+        ["agiros", "bag", "record",
          "-o", str(bag_path),
          "--qos-profile-overrides-path", str(qos_path)] + topics,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
@@ -105,7 +105,7 @@ def _replay_and_ground(bag_path: Path, text_query: str, timeout_s: float) -> dic
     # for this to close the loop; this test constructs nodes directly so that
     # remains a known limitation (see module docstring).
     play = subprocess.Popen(
-        ["ros2", "bag", "play", str(bag_path), "--loop", "--clock"],
+        ["agiros", "bag", "play", str(bag_path), "--loop", "--clock"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
     try:
