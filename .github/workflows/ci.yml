@@ -10,7 +10,11 @@ jobs:
   build-and-lint:
     runs-on: ubuntu-22.04
     container:
-      image: ros:humble
+      image: docker.agiros.org.cn/agiros/agiros-loong-ubuntu-base:latest
+      # The base image defaults to a non-root user; apt and colcon need root.
+      options: --user root
+    env:
+      AGIROS_REPO: http://repo.agiros.org.cn/debrepo/agiros/ubuntu2204lts/2606
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -18,17 +22,35 @@ jobs:
       - name: System deps
         shell: bash
         run: |
+          # The baked-in sources entry carries a stale signed-by keyring; rewrite
+          # it to the current official trusted=yes form (see install.sh upstream).
+          echo "deb [arch=$(dpkg --print-architecture) trusted=yes] $AGIROS_REPO jammy main" \
+            > /etc/apt/sources.list.d/agiros.list
           apt-get update
           apt-get install -y --no-install-recommends \
             python3-pip \
-            ros-humble-cv-bridge \
-            ros-humble-vision-msgs \
-            ros-humble-tf2-ros \
-            ros-humble-tf2-geometry-msgs \
-            ros-humble-nav2-msgs \
-            python3-colcon-common-extensions
+            agiros-loong-ros-base \
+            agiros-loong-cv-bridge \
+            agiros-loong-vision-msgs \
+            agiros-loong-tf2-ros \
+            agiros-loong-tf2-geometry-msgs \
+            agiros-loong-nav2-msgs \
+            agiros-loong-rviz2 \
+            python3-colcon-common-extensions \
+            python3-colcon-ros
           python3 -m pip install --upgrade pip
-          pip install "numpy<2.0" pyyaml ruff black pytest
+          pip install http://repo.agiros.org.cn/yumrepo/agiros/agirosdep/agirosdep-0.25.1-py3-none-any.whl
+          agirosdep init || true
+          agirosdep update
+          pip install "numpy<2.0" pyyaml ruff black
+          # apt colcon brings python3-pytest 6.2.5; force pip pytest >= 7 over it
+          pip install --upgrade "pytest>=7.4"
+
+      - name: Deps gate (agirosdep check)
+        shell: bash
+        run: |
+          source /opt/agiros/loong/setup.bash
+          agirosdep check --from-paths ros2_ws/src --ignore-src
 
       - name: Ruff lint
         run: |
@@ -37,13 +59,13 @@ jobs:
       - name: Colcon build (messages + scene_graph — fast path, no ML deps)
         shell: bash
         run: |
-          source /opt/ros/humble/setup.bash
+          source /opt/agiros/loong/setup.bash
           cd ros2_ws
           colcon build --packages-up-to go2_scene_graph --symlink-install
 
       - name: Unit tests (full pytest suite, config in pyproject.toml)
         shell: bash
         run: |
-          source /opt/ros/humble/setup.bash
+          source /opt/agiros/loong/setup.bash
           source ros2_ws/install/setup.bash
           python3 -m pytest -v
