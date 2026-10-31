@@ -6,36 +6,36 @@ Diagnostic commands first, fixes second.
 
 ```bash
 # Is the overlay built?
-ros2 pkg list | grep go2_ | sort
+agiros pkg list | grep go2_ | sort
 
 # Are our nodes running?
-ros2 node list | grep /go2_
+agiros node list | grep /go2_
 
 # Selected parameters for each standard node
 for n in go2_open_vocab_detector go2_scene_graph go2_language_grounding; do
     echo "== $n =="
-    ros2 param dump /$n
+    agiros param dump /$n
 done
 
 # Topic health
-ros2 topic hz /camera/color/image_raw
-ros2 topic hz /camera/depth/image_rect_raw
-ros2 topic hz /semantic/detections
-ros2 topic hz /semantic/scene_graph
+agiros topic hz /camera/color/image_raw
+agiros topic hz /camera/depth/image_rect_raw
+agiros topic hz /semantic/detections
+agiros topic hz /semantic/scene_graph
 
 # TF chain
-ros2 run tf2_ros tf2_echo map base_link
-ros2 run tf2_ros tf2_echo base_link camera_color_optical_frame
+agiros run tf2_ros tf2_echo map base_link
+agiros run tf2_ros tf2_echo base_link camera_color_optical_frame
 
 # QoS mismatch hunt
-ros2 topic info --verbose /camera/color/image_raw
+agiros topic info --verbose /camera/color/image_raw
 ```
 
 ## Common failures
 
 ### Detector subscribes but publishes nothing
 - **Check 1:** camera topic hz > 0. If not, the RealSense driver isn't running.
-- **Check 2:** `ros2 node list` contains `/go2_open_vocab_detector` and its log has no backend-load error.
+- **Check 2:** `agiros node list` contains `/go2_open_vocab_detector` and its log has no backend-load error.
 - **Check 3:** logs show `YOLO-World weights loaded`: if stuck, the weights download is probably blocked (no internet on Jetson? share via laptop).
 - **Fix:** correct the backend or model configuration, then restart the launch process.
 
@@ -45,21 +45,21 @@ ros2 topic info --verbose /camera/color/image_raw
 - **Fix:** set `device:=cuda:0` at launch and restart the process.
 
 ### Scene graph has no objects in `map` frame
-- **Symptom:** `ros2 topic echo /semantic/scene_graph` shows empty `nodes`.
-- **Cause 1:** TF `camera_color_optical_frame → map` lookup failing (most common). Check `ros2 run tf2_ros tf2_echo map camera_color_optical_frame`: error means `/odom` is broken.
+- **Symptom:** `agiros topic echo /semantic/scene_graph` shows empty `nodes`.
+- **Cause 1:** TF `camera_color_optical_frame → map` lookup failing (most common). Check `agiros run tf2_ros tf2_echo map camera_color_optical_frame`: error means `/odom` is broken.
 - **Cause 2:** detections topic not reaching the scene-graph node (QoS mismatch or remapping).
 - **Cause 3:** `min_observations_to_publish` too high, objects observed fewer than N frames are filtered.
 - **Fix for Cause 1:** launch with `use_slam_toolbox:=true`, or debug odometry in the sibling seeing-eye-dog stack (known: `/odom` stuck at (0,0,0) is a tracked blocker).
 
 ### Grounding returns wrong object
-- **Check 1:** query `ros2 service call /semantic/query_objects go2_semantic_msgs/srv/QueryObjects "{text_query: 'red chair', top_k: 5}"`. Inspect top-5 with scores.
-- **Check 2:** are the similar objects actually in the graph with distinguishable embeddings? `ros2 topic echo /semantic/scene_graph --field nodes`.
+- **Check 1:** query `agiros service call /semantic/query_objects go2_semantic_msgs/srv/QueryObjects "{text_query: 'red chair', top_k: 5}"`. Inspect top-5 with scores.
+- **Check 2:** are the similar objects actually in the graph with distinguishable embeddings? `agiros topic echo /semantic/scene_graph --field nodes`.
 - **Fix 1:** raise attribute weight in `config/grounding.yaml` (`score_weights.clip` → 0.8).
 - **Fix 2:** use the explicit attribute form `"the {color} {noun}"` consistently in the query.
 
 ### Goal pose is inside an obstacle
 - **Cause:** the costmap is absent, stale, or uses the wrong frame. Grounding fails closed in this state.
-- **Check:** `ros2 topic hz /global_costmap/costmap`.
+- **Check:** `agiros topic hz /global_costmap/costmap`.
 - **Fix:** repair the base navigation stack and confirm a fresh `map`-frame costmap before retrying.
 
 ### Action returns success=false for a reasonable query
@@ -73,7 +73,7 @@ ros2 topic info --verbose /camera/color/image_raw
 - **Fix:** reduce `detection_rate_hz`, swap to smaller backbone (`yolo_world_v2_s` → `yoloe_11s`), or ensure `jetson_clocks` and `nvpmodel -m 0` are set.
 
 ### cv_bridge fails on import / `numpy 2.x` error
-- **Cause:** `pip install` bumped numpy past 2.0 which is incompatible with cv_bridge Humble build.
+- **Cause:** `pip install` bumped numpy past 2.0 which is incompatible with the cv_bridge build shipped for this distro generation.
 - **Fix:** `pip install "numpy<2.0"` and rebuild affected C extensions.
 
 ### `ModuleNotFoundError: open_clip`
@@ -84,13 +84,13 @@ ros2 topic info --verbose /camera/color/image_raw
 - **Cause:** the `mobile_sam` pip package bundles an x86 `.so`; it is not aarch64-compatible.
 - **Fix:** On Jetson, use NanoSAM (`segmenter: nano_sam`). The `mobile_sam` package should be dev-only.
 
-### `ros2 launch` fails: "Could not find go2_semantic_msgs"
+### `agiros launch` fails: "Could not find go2_semantic_msgs"
 - **Cause:** overlay workspace not sourced, or built out of order.
 - **Fix:** `colcon build --packages-up-to go2_semantic_msgs` from `ros2_ws/`, then re-source `install/setup.bash`.
 
 ### Detector and scene-graph nodes are active but RViz shows no markers
 - **Check:** Is the MarkerArray topic selected in RViz and the frame set to `map`?
-- **Fix:** load the provided preset: `rviz2 -d $(ros2 pkg prefix go2_semantic_bringup)/share/go2_semantic_bringup/rviz/semantic_nav.rviz`.
+- **Fix:** load the provided preset: `rviz2 -d $(agiros pkg prefix go2_semantic_bringup)/share/go2_semantic_bringup/rviz/semantic_nav.rviz`.
 
 ### First detector run hangs on "Ultralytics requirement ['git+https://...CLIP.git'] not found, attempting AutoUpdate..."
 - **Cause:** Ultralytics YOLO-World has a runtime dep on OpenAI's `clip`, declared via `uv pip install` inside the inference path, not via `requirements.txt`. First run hangs for minutes while `uv` fetches it, and in air-gapped environments it hangs forever.
@@ -123,8 +123,8 @@ ros2 topic info --verbose /camera/color/image_raw
 
 If you see symptoms outside this list, take three actions before pinging anyone:
 
-1. Capture a `ros2 bag record -a` snapshot of a 30-second window around the failure.
-2. Run `ros2 doctor --report > /tmp/doctor.txt`.
+1. Capture a `agiros bag record -a` snapshot of a 30-second window around the failure.
+2. Run `agiros doctor --report > /tmp/doctor.txt`.
 3. Attach the logs from `~/.ros/log/latest/` for the failing node.
 
 Then open an issue with hardware spec, ROS distro, branch SHA, and the three artifacts above.

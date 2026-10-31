@@ -15,14 +15,14 @@ This checklist ends at a motors-disabled dry-run. Motored navigation has a separ
 
 ```bash
 cd <repo>
-source /opt/ros/humble/setup.bash
+source /opt/agiros/loong/setup.bash
 source <base-workspace>/install/setup.bash
 
 python3 -m pip install -r requirements.txt
 cd ros2_ws
 colcon build --symlink-install --packages-up-to go2_semantic_bringup
 source install/setup.bash
-ros2 launch go2_semantic_bringup semantic_nav.launch.py --show-args
+agiros launch go2_semantic_bringup semantic_nav.launch.py --show-args
 ```
 
 Do not reinstall PyTorch unless following the NVIDIA instructions for the exact JetPack release.
@@ -30,12 +30,12 @@ Do not reinstall PyTorch unless following the NVIDIA instructions for the exact 
 ## 3. Discover live interfaces
 
 ```bash
-ros2 topic list -t
-ros2 node list
-ros2 topic hz <color-image-topic>
-ros2 topic hz <aligned-depth-topic>
-ros2 topic echo <color-camera-info-topic> --once
-ros2 run tf2_ros tf2_echo map <color-optical-frame>
+agiros topic list -t
+agiros node list
+agiros topic hz <color-image-topic>
+agiros topic hz <aligned-depth-topic>
+agiros topic echo <color-camera-info-topic> --once
+agiros run tf2_ros tf2_echo map <color-optical-frame>
 ```
 
 Pass criteria:
@@ -48,9 +48,9 @@ Pass criteria:
 ## 4. Start perception with motors disabled
 
 ```bash
-PROFILE="$(ros2 pkg prefix go2_semantic_bringup)/share/go2_semantic_bringup/config/scene_profiles/jetson_tier_a.yaml"
+PROFILE="$(agiros pkg prefix go2_semantic_bringup)/share/go2_semantic_bringup/config/scene_profiles/jetson_tier_a.yaml"
 
-ros2 launch go2_semantic_bringup semantic_nav.launch.py \
+agiros launch go2_semantic_bringup semantic_nav.launch.py \
   detector_params:="$PROFILE" \
   scene_graph_params:="$PROFILE" \
   grounding_params:="$PROFILE" \
@@ -70,8 +70,8 @@ Confirm `/semantic/detections` and `/semantic/scene_graph` are sustained and ins
 Only enable grounding after a fresh global costmap exists in `map`:
 
 ```bash
-ros2 topic hz /global_costmap/costmap
-ros2 action send_goal /semantic/ground_and_navigate \
+agiros topic hz /global_costmap/costmap
+agiros action send_goal /semantic/ground_and_navigate \
   go2_semantic_msgs/action/GroundAndNavigate \
   "{text_query: 'go near the chair', stand_off_m: 0.9, dry_run: true}" \
   --feedback

@@ -6,8 +6,8 @@ A live demo procedure for capabilities that have already passed the hardware gat
 
 - [ ] GO2 booted, crouched, motors off (Unitree app → motors disabled).
 - [ ] Jetson and GO2 are reachable through the current lab-approved network path.
-- [ ] RealSense streaming: `ros2 topic hz /camera/color/image_raw` shows ≥15 Hz.
-- [ ] TF tree healthy: `ros2 run tf2_tools view_frames` shows `map → odom → base_link → camera_color_optical_frame`.
+- [ ] RealSense streaming: `agiros topic hz /camera/color/image_raw` shows ≥15 Hz.
+- [ ] TF tree healthy: `agiros run tf2_tools view_frames` shows `map → odom → base_link → camera_color_optical_frame`.
 - [ ] For a motion demo only, the full base-navigation acceptance gate in `docs/jetson_cookbook.md` has passed.
 - [ ] Semantic-nav overlay launched, `/semantic/scene_graph` publishing with ≥8 objects (for a small room after a 20-second scan).
 - [ ] RViz preset `go2_semantic_nav.rviz` open with layers: map, costmap, object markers, grounding goal marker, camera image.
@@ -21,7 +21,7 @@ Operator narrates:
 
 Operator runs:
 ```bash
-ros2 action send_goal /semantic/ground_and_navigate \
+agiros action send_goal /semantic/ground_and_navigate \
     go2_semantic_msgs/action/GroundAndNavigate \
     "{text_query: 'go near the red chair', stand_off_m: 0.9, dry_run: true}" \
     --feedback
@@ -40,7 +40,7 @@ Do not run this section until the motion acceptance gate has passed and the laun
 
 Operator runs:
 ```bash
-ros2 action send_goal /semantic/ground_and_navigate \
+agiros action send_goal /semantic/ground_and_navigate \
     go2_semantic_msgs/action/GroundAndNavigate \
     "{text_query: 'go stand next to the red chair', stand_off_m: 0.9, dry_run: false}"
 ```
@@ -53,7 +53,7 @@ What happens:
 
 ### Take 3: Recovery ("can you approach a window instead?")
 ```bash
-ros2 action send_goal /semantic/ground_and_navigate \
+agiros action send_goal /semantic/ground_and_navigate \
     go2_semantic_msgs/action/GroundAndNavigate \
     "{text_query: 'move near the window', stand_off_m: 0.7, dry_run: false}"
 ```
@@ -70,7 +70,7 @@ If motors must stay off:
 
 If scene-graph is empty:
 - Walk the camera handheld through the room for 30 seconds first.
-- Verify via `ros2 topic echo /semantic/scene_graph --field nodes --once | wc -l`.
+- Verify via `agiros topic echo /semantic/scene_graph --field nodes --once | wc -l`.
 
 ## What to emphasize on camera
 

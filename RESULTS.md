@@ -1,3 +1,5 @@
+> **Note (2026-10-31):** Numbers below were measured pre-AGIROS-migration (ROS 2 Humble); distro references are historical record and intentionally not rewritten. Re-measure on AGIROS loong before citing.
+
 # Results
 
 Evaluation numbers for go2-semantic-nav. **Any claim in this file must be measured on the stated platform, not extrapolated.** Ranges in angle brackets are placeholders to be filled after Phase 5 eval runs on real hardware.

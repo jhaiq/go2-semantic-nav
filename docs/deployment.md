@@ -23,7 +23,7 @@ preflight, motors untouched, dry-run actuator, then low-speed motion. Keep
 One launch brings up both stacks:
 
 ```bash
-ros2 launch go2_semantic_bringup deploy.launch.py \
+agiros launch go2_semantic_bringup deploy.launch.py \
   planner:=nav2 localization:=slam_mapping hardware_adapter:=dry_run \
   allow_goal_publication:=false
 ```
@@ -34,7 +34,7 @@ Motion needs all three: `hardware_adapter:=unitree_sport`,
 ## Workstation setup
 
 ```bash
-source /opt/ros/humble/setup.bash
+source /opt/agiros/loong/setup.bash
 source <base-workspace>/install/setup.bash
 
 cd <repo>
@@ -67,7 +67,7 @@ git clone https://github.com/yusufdxb/go2-semantic-nav.git
 cd go2-semantic-nav
 python3 -m pip install "numpy<2.0" ultralytics open_clip_torch networkx pyyaml
 
-source /opt/ros/humble/setup.bash
+source /opt/agiros/loong/setup.bash
 source <base-workspace>/install/setup.bash
 cd ros2_ws
 colcon build --symlink-install --packages-up-to go2_semantic_bringup
@@ -86,10 +86,10 @@ python3 scripts/prefetch_models.py
 Topic names differ between RealSense driver versions. Discover the live names instead of assuming the defaults:
 
 ```bash
-ros2 topic list -t | grep -E 'camera|image|camera_info'
-ros2 topic hz <color-image-topic>
-ros2 topic hz <aligned-depth-topic>
-ros2 topic echo <color-camera-info-topic> --once
+agiros topic list -t | grep -E 'camera|image|camera_info'
+agiros topic hz <color-image-topic>
+agiros topic hz <aligned-depth-topic>
+agiros topic echo <color-camera-info-topic> --once
 ```
 
 Depth must already be registered to the color optical frame. The detector rejects mismatched frames or image dimensions by default.
@@ -112,13 +112,13 @@ test -r "$NANOSAM_DECODER_ENGINE"
 Use one installed scene profile for all three nodes, remap the discovered camera topics, and leave goal publication disabled:
 
 ```bash
-source /opt/ros/humble/setup.bash
+source /opt/agiros/loong/setup.bash
 source <base-workspace>/install/setup.bash
 source <repo>/ros2_ws/install/setup.bash
 
-PROFILE="$(ros2 pkg prefix go2_semantic_bringup)/share/go2_semantic_bringup/config/scene_profiles/jetson_tier_a.yaml"
+PROFILE="$(agiros pkg prefix go2_semantic_bringup)/share/go2_semantic_bringup/config/scene_profiles/jetson_tier_a.yaml"
 
-ros2 launch go2_semantic_bringup semantic_nav.launch.py \
+agiros launch go2_semantic_bringup semantic_nav.launch.py \
   detector_params:="$PROFILE" \
   scene_graph_params:="$PROFILE" \
   grounding_params:="$PROFILE" \

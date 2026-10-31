@@ -42,7 +42,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 # Build
-source /opt/ros/humble/setup.bash
+source /opt/agiros/loong/setup.bash
 cd ros2_ws && colcon build --symlink-install
 source install/setup.bash
 
@@ -92,7 +92,7 @@ Most common culprits (seen in this project's own history):
 
 If none of those apply, open an issue with:
 - OS + ROS distro + Python version + torch version + GPU model
-- Output of `ros2 doctor --report`
+- Output of `agiros doctor --report`
 - The exact command + the first ~50 lines of the error
 
 ## Questions?

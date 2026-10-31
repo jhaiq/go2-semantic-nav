@@ -1,7 +1,7 @@
 # go2-semantic-nav
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![ROS 2 Humble](https://img.shields.io/badge/ROS_2-Humble-blue.svg)](https://docs.ros.org/en/humble/)
+[![AGIROS loong](https://img.shields.io/badge/AGIROS-loong-blue.svg)](https://gitee.com/agiros)
 [![Jetson Orin NX](https://img.shields.io/badge/Jetson-Orin_NX_16GB-76B900.svg)](https://www.nvidia.com/en-us/autonomous-machines/embedded-systems/jetson-orin/)
 
 **Open-vocabulary 3D semantic scene-graph mapping and language-grounded navigation for the Unitree GO2 quadruped on NVIDIA Jetson Orin NX 16 GB.**
@@ -151,7 +151,7 @@ The latency profiler reads timestamps stamped into `SemanticDetectionArray.laten
 
 ## Prerequisites
 
-- **ROS 2 Humble** with `nav2_bringup`
+- **AGIROS loong** (ROS 2 Humble-generation compatible) with `nav2_bringup`
 - **Python 3.10** (matches JetPack 6.x)
 - **PyTorch 2.x with CUDA 12.x** (tested with `torch==2.11.0+cu128` on the Blackwell consumer GPU)
 - **RealSense camera** publishing on `/camera/...` (same namespace as `go2_perception`)
@@ -176,15 +176,15 @@ source install/setup.bash
 
 ```bash
 # Terminal 1: play the recorded RGB-D bag
-ros2 bag play ~/data/go2-indoor-sample/
+agiros bag play ~/data/go2-indoor-sample/
 
 # Terminal 2: launch semantic-nav stack (detector + scene graph + grounding)
-ros2 launch go2_semantic_bringup semantic_nav.launch.py \
+agiros launch go2_semantic_bringup semantic_nav.launch.py \
     device:=cuda:0 \
-    prompt_classes_file:=$(ros2 pkg prefix go2_open_vocab_detector)/share/go2_open_vocab_detector/config/prompts_indoor.yaml
+    prompt_classes_file:=$(agiros pkg prefix go2_open_vocab_detector)/share/go2_open_vocab_detector/config/prompts_indoor.yaml
 
 # Terminal 3: ground a query
-ros2 action send_goal /semantic/ground_and_navigate \
+agiros action send_goal /semantic/ground_and_navigate \
     go2_semantic_msgs/action/GroundAndNavigate \
     "{text_query: 'go near the red chair', stand_off_m: 0.9, dry_run: true}" \
     --feedback

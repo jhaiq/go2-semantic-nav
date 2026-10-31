@@ -45,7 +45,7 @@ python eval/run_eval.py --mode synthetic --warmup-s 15 \
 # term 1
 python3 scripts/synthetic_publisher.py --ros-args -p rate_hz:=8.0
 # term 2
-ros2 launch go2_open_vocab_detector detector.launch.py
+agiros launch go2_open_vocab_detector detector.launch.py
 # term 3
 python3 scripts/latency_profiler.py --frames 100 --warmup-frames 20 \
     --out eval/results/latencies_dev_gpu.json
@@ -53,7 +53,7 @@ python3 scripts/latency_profiler.py --frames 100 --warmup-frames 20 \
 
 ## 3. Record-and-replay integration: `dev-gpu`: **VERIFIED 2026-04-13**
 
-`scripts/record_replay_integration_test.py` end-to-end: synthetic publisher → `ros2 bag record` (4 topics) → `ros2 bag play --clock --loop` → in-process detector + scene_graph + grounding (all with `use_sim_time=True`) → grounding action dispatch.
+`scripts/record_replay_integration_test.py` end-to-end: synthetic publisher → `agiros bag record` (4 topics) → `agiros bag play --clock --loop` → in-process detector + scene_graph + grounding (all with `use_sim_time=True`) → grounding action dispatch.
 
 **Observed (cached bag `tests/bags/synthetic_bus/`):**
 - scene graph populated AND published **after 1.0 s** of bag playback
@@ -88,11 +88,11 @@ All Jetson rows are `<pending>` until we have the hardware in the loop. Blueprin
 
 ## Known issues surfaced during benchmarking
 
-### `ros2 bag play` + direct node construction = TF-stale race **(FIXED 2026-04-13)**
-Initial record-replay attempts failed because `ros2 bag play` replays messages at their ORIGINAL timestamps while subscribers use wall-clock by default. TF lookups then failed because the requested stamp was outside the TF cache window.
+### `agiros bag play` + direct node construction = TF-stale race **(FIXED 2026-04-13)**
+Initial record-replay attempts failed because `agiros bag play` replays messages at their ORIGINAL timestamps while subscribers use wall-clock by default. TF lookups then failed because the requested stamp was outside the TF cache window.
 
 **Fix applied:**
-1. `scripts/record_replay_integration_test.py` now invokes `ros2 bag play --clock --loop`.
+1. `scripts/record_replay_integration_test.py` now invokes `agiros bag play --clock --loop`.
 2. The test calls `rclpy.init(args=["--ros-args", "-p", "use_sim_time:=true"])` so the default context carries sim-time.
 3. Each in-process node then has `use_sim_time=True` set explicitly as its first parameter.
 4. The composite `semantic_nav.launch.py` exposes `use_sim_time:=true` as a launch arg that threads through all 3 nodes, robot operators use the same arg for on-hardware replay.

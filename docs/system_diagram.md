@@ -23,7 +23,7 @@ flowchart LR
   end
 
   subgraph user["Operator"]
-    CLI[ros2 action send_goal<br/>or scripts/send_query.py]
+    CLI[agiros action send_goal<br/>or scripts/send_query.py]
   end
 
   RS --> RSDRV

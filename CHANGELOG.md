@@ -1,3 +1,5 @@
+> **Note (2026-10-31):** Entries below predate the AGIROS loong migration; distro references (`ROS 2 Humble`, `/opt/ros/humble`) are historical record and intentionally not rewritten.
+
 # Changelog
 
 All notable changes to this project are documented here. Dates are `YYYY-MM-DD`.

@@ -15,10 +15,10 @@ Pre-tuned backend + threshold combinations for the three deploy tiers documented
 Pass the chosen profile via the composite launch file:
 
 ```bash
-ros2 launch go2_semantic_bringup semantic_nav.launch.py \
-    detector_params:=$(ros2 pkg prefix go2_semantic_bringup)/share/go2_semantic_bringup/config/scene_profiles/jetson_tier_a.yaml \
-    grounding_params:=$(ros2 pkg prefix go2_semantic_bringup)/share/go2_semantic_bringup/config/scene_profiles/jetson_tier_a.yaml \
-    scene_graph_params:=$(ros2 pkg prefix go2_semantic_bringup)/share/go2_semantic_bringup/config/scene_profiles/jetson_tier_a.yaml
+agiros launch go2_semantic_bringup semantic_nav.launch.py \
+    detector_params:=$(agiros pkg prefix go2_semantic_bringup)/share/go2_semantic_bringup/config/scene_profiles/jetson_tier_a.yaml \
+    grounding_params:=$(agiros pkg prefix go2_semantic_bringup)/share/go2_semantic_bringup/config/scene_profiles/jetson_tier_a.yaml \
+    scene_graph_params:=$(agiros pkg prefix go2_semantic_bringup)/share/go2_semantic_bringup/config/scene_profiles/jetson_tier_a.yaml
 ```
 
 The launch file takes three separate params paths; pointing all three at the same

@@ -13,7 +13,7 @@ Goal: produce a reproducible, defensible evaluation that supports resume bullets
 | **End-to-end task success** | User says the query, robot arrives. Single binary human judgment, N judges | ≥0.65 | A/B labeling by two operators |
 | **Grounding latency p50 / p95** | Action-goal-received → `/goal_pose`-published | p50 ≤ 0.5 s, p95 ≤ 1.2 s | rclpy timestamp |
 | **Detection latency p50 / p95** | Image stamp → SemanticDetectionArray publish | p50 ≤ 250 ms, p95 ≤ 450 ms at Jetson 25 W | per-frame log |
-| **Sustained detection rate** | Mean `/semantic/detections` rate over a 5-min run post thermal soak | ≥3 Hz at Jetson 25 W | ros2 topic hz |
+| **Sustained detection rate** | Mean `/semantic/detections` rate over a 5-min run post thermal soak | ≥3 Hz at Jetson 25 W | agiros topic hz |
 | **Scene-graph object count** | #objects with `observation_count ≥ min_observations_to_publish` after 60 s of coverage | ≥10 in a typical office room | `/semantic/scene_graph` |
 | **False-positive rate** | #graph objects that do not correspond to a real physical object, per minute of runtime | ≤1 / min | operator annotation |
 
