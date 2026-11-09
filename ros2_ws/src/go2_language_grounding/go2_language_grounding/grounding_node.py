@@ -529,7 +529,7 @@ class GroundingNode(Node):
                 f"failed to parse text_query {req.text_query!r}: {exc}",
                 start_ns,
             )
-        if req.preferred_relation.strip(): 
+        if req.preferred_relation.strip():
             parsed.relation = req.preferred_relation
         weights = self._current_weights()
 
@@ -545,7 +545,7 @@ class GroundingNode(Node):
 
         if req.top_k > 0:
             candidates = candidates[: int(req.top_k)]
-        
+
         self._publish_feedback(goal_handle, "SCORING", candidates, len(graph.nodes))
         if goal_handle.is_cancel_requested:
             return self._cancel_result(goal_handle, start_ns)
@@ -905,7 +905,7 @@ class GroundingNode(Node):
         result.grounding_score = chosen.score if chosen else 0.0
         result.terminal_state = terminal_state
         result.total_latency_s = (time.monotonic_ns() - start_ns) / 1e9
-        
+
         if final_goal is not None:
             result.final_goal = final_goal
 

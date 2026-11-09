@@ -35,7 +35,7 @@ def build_object_markers(
 ) -> MarkerArray:
     """Emit one sphere + one label text marker per object in the map frame."""
     global _prev_sphere_ids, _prev_text_ids
-    
+
     arr = MarkerArray()
     current_sphere_ids: Set[int] = set()
     current_text_ids: Set[int] = set()
