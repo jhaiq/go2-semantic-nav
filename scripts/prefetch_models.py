@@ -32,6 +32,11 @@ def _fetch_yoloe_11s() -> None:
     print("[prefetch] YOLOE-11s")
     YOLO("yoloe-11s-seg.pt")
 
+def _fetch_yoloe_26s() -> None:
+    from ultralytics import YOLO
+
+    print("[prefetch] YOLOE-26s")
+    YOLO("yoloe-26s-seg.pt")
 
 def _fetch_mobile_sam() -> None:
     # mobile_sam checkpoint is not auto-downloaded by the pip package.
@@ -67,6 +72,7 @@ FETCHERS: dict[str, Callable[[], None]] = {
     "yolo_world_v2_s": _fetch_yolo_world_v2_s,
     "yolo_world_v2_m": _fetch_yolo_world_v2_m,
     "yoloe_11s": _fetch_yoloe_11s,
+    "yoloe_26s": _fetch_yoloe_26s,
     "mobile_sam": _fetch_mobile_sam,
     "openclip_vit_b16": _fetch_openclip_vit_b16,
     "openclip_vit_l14": _fetch_openclip_vit_l14,

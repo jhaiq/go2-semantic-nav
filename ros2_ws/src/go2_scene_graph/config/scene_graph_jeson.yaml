@@ -11,7 +11,7 @@ go2_scene_graph:
 
     # Publication cadence
     publish_rate_hz: 2.0
-    tf_lookup_timeout_s: 5.0
+    tf_lookup_timeout_s: 0.1
     use_precomputed_map_centroid: true
 
     # Association
@@ -21,7 +21,7 @@ go2_scene_graph:
     dims_ema_alpha: 0.2
     embed_ema_alpha: 0.2
     object_ttl_s: 45.0
-    min_observations_to_publish: 3
+    min_observations_to_publish: 4
     merge_on_label_match_bonus: 0.05
 
     # Spatial relations
