@@ -25,6 +25,10 @@ def test_lexical_no_overlap():
     assert score < 0.7
 
 
+def test_lexical_character_overlap_ignores_short_words():
+    assert lexical_label_match("car", "chair") == 0.0
+
+
 def test_cosine_identity():
     a = np.array([1.0, 0.0, 0.0])
     assert cosine_similarity(a, a) == pytest.approx(1.0)
@@ -47,3 +51,13 @@ def test_combine_default_weights():
 def test_combine_custom_weights():
     w = ScoreWeights(clip=1.0, label=0.0, spatial=0.0)
     assert combine(0.5, 1.0, 1.0, w) == pytest.approx(0.5)
+
+
+def test_combine_attribute_weights_and_weak_label_veto():
+    weights = ScoreWeights(attr_clip=6.0, attr_label=3.0, attr_spatial=1.0)
+    assert combine(1.0, 0.0, 0.0, weights, has_attribute=True) == pytest.approx(
+        0.18
+    )
+    assert combine(1.0, 1.0, 0.0, weights, has_attribute=True) == pytest.approx(
+        0.9
+    )

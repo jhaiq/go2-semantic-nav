@@ -44,6 +44,7 @@ go2_open_vocab_detector:
       - cup
       - laptop
       - backpack
+      - box
 
     # Soft lifecycle
     active: true

@@ -54,15 +54,22 @@ def generate_launch_description() -> LaunchDescription:
 
     args = [
         DeclareLaunchArgument("device", default_value="cuda:0"),
-        DeclareLaunchArgument("backend", default_value="yolo_world_v2_s"),
-        DeclareLaunchArgument("segmenter", default_value="mobile_sam"),
-        DeclareLaunchArgument("encoder", default_value="openclip_vit_b16"),
+        DeclareLaunchArgument("backend", default_value="yoloe_26s"),
+        DeclareLaunchArgument("segmenter", default_value="native"),
+        DeclareLaunchArgument("encoder", default_value="mobileclip2_s0"),
         DeclareLaunchArgument("prompt_classes_file", default_value=""),
-        DeclareLaunchArgument("image_topic", default_value="/camera/color/image_raw"),
-        DeclareLaunchArgument("depth_topic", default_value="/camera/depth/image_rect_raw"),
-        DeclareLaunchArgument("camera_info_topic", default_value="/camera/color/camera_info"),
+        DeclareLaunchArgument(
+            "image_topic", default_value="/camera/camera/color/image_raw"
+        ),
+        DeclareLaunchArgument(
+            "depth_topic",
+            default_value="/camera/camera/aligned_depth_to_color/image_raw",
+        ),
+        DeclareLaunchArgument(
+            "camera_info_topic", default_value="/camera/camera/color/camera_info"
+        ),
         DeclareLaunchArgument("require_aligned_depth", default_value="true"),
-        DeclareLaunchArgument("detection_rate_hz", default_value="5.0"),
+        DeclareLaunchArgument("detection_rate_hz", default_value="2.0"),
         DeclareLaunchArgument("publish_rate_hz", default_value="2.0"),
         DeclareLaunchArgument("enable_detector", default_value="true"),
         DeclareLaunchArgument("enable_scene_graph", default_value="true"),

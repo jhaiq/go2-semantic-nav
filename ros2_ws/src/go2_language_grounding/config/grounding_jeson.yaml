@@ -13,13 +13,20 @@ go2_language_grounding:
     navigation_cancel_timeout_s: 2.0
 
     # Encoder (must match detector's embedding dim for CLIP cosine to be meaningful)
-    encoder_backend: mobileclip_s2
+    encoder_backend: mobileclip2_s0
     device: cuda:0
 
     # Score weights
     score_weight_clip: 0.7
     score_weight_label: 0.2
     score_weight_spatial: 0.1
+    score_weight_attr_clip: 0.4
+    score_weight_attr_label: 0.2
+    score_weight_attr_spatial: 0.4
+    attr_delta_offset: 0.03
+    attr_delta_scale: 0.10
+    attr_label_veto_threshold: 0.1
+    spatial_distance_scale_m: 2.0
 
     # Goal sampling
     # Measured from the object's SURFACE (centroid + half footprint extent).

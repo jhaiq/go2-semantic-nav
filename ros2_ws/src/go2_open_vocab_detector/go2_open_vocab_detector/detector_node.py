@@ -79,9 +79,11 @@ class DetectorNode(Node):
         self.declare_parameter("max_depth_m", 8.0)
         self.declare_parameter("prompts", _DEFAULT_PROMPTS)
         self.declare_parameter("prompt_classes_file", "")
-        self.declare_parameter("image_topic", "/camera/color/image_raw")
-        self.declare_parameter("depth_topic", "/camera/depth/image_rect_raw")
-        self.declare_parameter("camera_info_topic", "/camera/color/camera_info")
+        self.declare_parameter("image_topic", "/camera/camera/color/image_raw")
+        self.declare_parameter(
+            "depth_topic", "/camera/camera/aligned_depth_to_color/image_raw"
+        )
+        self.declare_parameter("camera_info_topic", "/camera/camera/color/camera_info")
         self.declare_parameter("require_aligned_depth", True)
         self.declare_parameter("sync_slop_sec", 0.05)
         self.declare_parameter("mask_downsample", 1)

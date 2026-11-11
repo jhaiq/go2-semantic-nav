@@ -74,6 +74,7 @@ Source tree under `ros2_ws/src/` matches this table 1:1.
   - serves `/semantic/query_objects`
 - **`go2_language_grounding` (rclpy node):**
   - query parser plus CLIP text encode
+  - attribute-aware CLIP ranking and distance-aware spatial scoring
   - spatial relation resolver
   - costmap-aware stand-off goal sampling
   - action `/semantic/ground_and_navigate`
